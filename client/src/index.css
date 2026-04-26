@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+}
+
+body { 
+    font-family: 'Inter', sans-serif; 
+}
+
+h1, h2, h3, .font-headline { 
+    font-family: 'Manrope', sans-serif; 
+}
+
+.editorial-gradient {
+    background: linear-gradient(135deg, #f7f9fc 0%, #f0f4f8 100%);
+}
+
+.soft-shadow {
+    box-shadow: 0 20px 40px rgba(44, 51, 56, 0.06);
+}
+
+.ghost-border:focus-within {
+    box-shadow: 0 0 0 2px rgba(0, 101, 146, 0.2);
+}
