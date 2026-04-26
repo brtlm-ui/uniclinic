@@ -1,20 +1,37 @@
-import React, {useState} from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import Cookies from 'universal-cookie';
+import { config, endpoints } from '../config/config';
+
+const cookies = new Cookies();
 
 const Login = () => {
     const navigate = useNavigate();
 
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
-        if(username === "test" && (password === "test" || password === "text")) {
+        setError('');
+        setLoading(true);
+        try {
+            const response = await axios.post(`${config.uniClinicAPI}${endpoints.staff}/login`, { username, password });
+            const { token, data } = response.data;
+            cookies.set('TOKEN', token, { path: '/', maxAge: 86400 });
+            localStorage.setItem('user', JSON.stringify(data));
             navigate('/dashboard');
-        } else {
-            alert("Invalid credentials. Please try again.");
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Login failed. Please try again.';
+            setError(msg);
+        } finally {
+            setLoading(false);
         }
-    }
+    };
 
     return (
         <>
@@ -82,12 +99,12 @@ const Login = () => {
                                             className="w-full pl-12 pr-4 py-4 bg-surface-container-highest border-none rounded-lg text-on-surface placeholder:text-outline-variant focus:ring-0 focus:bg-surface-container-lowest transition-all" 
                                             id="password" 
                                             placeholder="••••••••" 
-                                            type="password" 
+                                            type={showPassword ? 'text' : 'password'} 
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                         />
-                                        <button className="absolute right-4 text-outline-variant hover:text-primary transition-colors" type="button">
-                                            <span className="material-symbols-outlined">visibility</span>
+                                        <button className="absolute right-4 text-outline-variant hover:text-primary transition-colors" type="button" onClick={() => setShowPassword(prev => !prev)}>
+                                            <span className="material-symbols-outlined">{showPassword ? 'visibility_off' : 'visibility'}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -98,13 +115,17 @@ const Login = () => {
                                     </label>
                                     <a className="text-sm font-bold text-primary hover:text-primary-dim transition-colors" href="#">Forgot Password?</a>
                                 </div>
+                                {error && (
+                                    <p className="text-sm text-red-500 font-medium text-center -mb-2">{error}</p>
+                                )}
                                 <button 
-                                    className="w-full py-5 bg-primary text-on-primary font-bold rounded-full shadow-lg shadow-primary/20 hover:bg-primary-dim hover:scale-[1.02] active:scale-95 transition-all duration-200 mt-4 flex justify-center items-center gap-2" 
+                                    className="w-full py-5 bg-primary text-on-primary font-bold rounded-full shadow-lg shadow-primary/20 hover:bg-primary-dim hover:scale-[1.02] active:scale-95 transition-all duration-200 mt-4 flex justify-center items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed" 
                                     type="submit"
                                     onClick={(e) => handleLogin(e)}
+                                    disabled={loading}
                                 >
-                                        Access Dashboard
-                                        <span className="material-symbols-outlined">arrow_forward</span>
+                                    {loading ? 'Signing in...' : 'Access Dashboard'}
+                                    {!loading && <span className="material-symbols-outlined">arrow_forward</span>}
                                 </button>
                             </form>
                             <div className="mt-12 pt-8 border-t border-outline-variant/10 text-center">

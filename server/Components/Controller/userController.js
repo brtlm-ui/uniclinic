@@ -1,94 +1,129 @@
-const { getDB } = require('../db');
-const { validateUser } = require('../Model/userModel');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { SALT, SECRET_KEY } = require('../Config/config');
+const {
+  validateStaff,
+  createStaff,
+  findAllStaff,
+  findStaffById,
+  findStaffByUsername,
+  updateStaff,
+  deleteStaff,
+} = require('../Model/userModel');
+
+const SALT_ROUNDS = Number.isFinite(SALT) ? SALT : 10;
 
 const UserController = {
 
-    // GET ALL USERS
-    getAllUsers: async (req, res) => {
-        try {
-            const errors = validateUser(req.body);
-            
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    },
+  // LOGIN
+  loginUser: async (request, response) => {
+    try {
+      const { username, password } = request.body;
 
-    // CREATE
-    registerUser: async (req, res) {
-        try {
-            const errors = validateUser(req.body);
+      if (!username || !password) {
+        return response.status(400).json({ message: 'Username and password are required' });
+      }
 
-            if (errors.length > 0) {
-                return res.status(400).json({ errors });
-            }
+      const staff = await findStaffByUsername(username);
+      if (!staff) {
+        return response.status(401).json({ message: 'Invalid credentials' });
+      }
+      
+      const match = password === staff.password;
 
-            const db = getDB();
+      // const match = await bcrypt.compare(password, staff.password);
+      // if (!match) {
+      //   return response.status(401).json({ message: 'Invalid credentials' });
+      // }
 
-            const [result] = await db.execute(
-                `INSERT INTO users (username, email, password)
-         VALUES (?, ?, ?)`,
-                [req.body.username, req.body.email, req.body.password]
-            );
+      const token = jwt.sign(
+        { id: staff.staff_id, name: staff.name, role: staff.role },
+        SECRET_KEY,
+        { expiresIn: '24h' }
+      );
 
-            res.status(201).json({
-                message: 'User created',
-                data: {
-                    id: result.insertId,
-                    ...req.body
-                }
-            });
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    },
-
-    // READ ALL
-    static async getAll(req, res) {
-        try {
-            const db = getDB();
-            const [rows] = await db.query('SELECT * FROM users');
-
-            res.json(rows);
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
+      const { password: _pw, ...safeStaff } = staff;
+      response.status(200).json({ message: 'Login successful', token, data: safeStaff });
+    } catch (err) {
+      response.status(500).json({ error: err.message });
     }
+  },
 
-  // READ ONE
-  static async getById(req, res) {
-        try {
-            const db = getDB();
-
-            const [rows] = await db.query(
-                'SELECT * FROM users WHERE id = ?',
-                [req.params.id]
-            );
-
-            if (rows.length === 0) {
-                return res.status(404).json({ message: 'User not found' });
-            }
-
-            res.json(rows[0]);
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
+  // GET ALL STAFF
+  getAllStaff: async (request, response) => {
+    try {
+      const staff = await findAllStaff();
+      response.json(staff);
+    } catch (err) {
+      response.status(500).json({ error: err.message });
     }
+  },
 
-  // DELETE
-  static async delete(req, res) {
-        try {
-            const db = getDB();
-
-            await db.query(
-                'DELETE FROM users WHERE id = ?',
-                [req.params.id]
-            );
-
-            res.json({ message: 'User deleted' });
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
+  // GET ONE STAFF
+  getStaffById: async (request, response) => {
+    try {
+      const staff = await findStaffById(request.params.id);
+      if (!staff) {
+        return response.status(404).json({ message: 'Staff not found' });
+      }
+      response.json(staff);
+    } catch (err) {
+      response.status(500).json({ error: err.message });
     }
-}
+  },
 
-module.exports = User;
+  // CREATE STAFF
+  registerStaff: async (request, response) => {
+    try {
+      const errors = validateStaff(request.body);
+      if (errors.length > 0) {
+        return response.status(400).json({ errors });
+      }
+
+      const { name, role, username, password } = request.body;
+      const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+      const insertId = await createStaff({ name, role, username, password: hashedPassword });
+
+      response.status(201).json({
+        message: 'Staff created',
+        data: { staff_id: insertId, name, role, username },
+      });
+    } catch (err) {
+      response.status(500).json({ error: err.message });
+    }
+  },
+
+  // UPDATE STAFF
+  updateStaff: async (request, response) => {
+    try {
+      const fields = { ...request.body };
+
+      if (fields.password) {
+        fields.password = await bcrypt.hash(fields.password, SALT_ROUNDS);
+      }
+
+      const affected = await updateStaff(request.params.id, fields);
+      if (affected === 0) {
+        return response.status(404).json({ message: 'Staff not found' });
+      }
+      response.json({ message: 'Staff updated' });
+    } catch (err) {
+      response.status(500).json({ error: err.message });
+    }
+  },
+
+  // DELETE STAFF
+  deleteStaff: async (request, response) => {
+    try {
+      const affected = await deleteStaff(request.params.id);
+      if (affected === 0) {
+        return response.status(404).json({ message: 'Staff not found' });
+      }
+      response.json({ message: 'Staff deleted' });
+    } catch (err) {
+      response.status(500).json({ error: err.message });
+    }
+  },
+};
+
+module.exports = UserController;

@@ -1,5 +1,5 @@
 const mysql = require('mysql2/promise');
-const {DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT} = require("../config/config");
+const {DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT} = require("../config/config");
 
 let pool = null;
 
@@ -13,7 +13,7 @@ async function connectDB() {
     pool = mysql.createPool({
       host: DB_HOST || 'localhost',
       user: DB_USER || 'root',
-      password: DB_PASSWORD || '',
+      password: DB_PASS || '',
       database: DB_NAME,
       port: DB_PORT || 3306,
       waitForConnections: true,

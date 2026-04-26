@@ -2,10 +2,19 @@ import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { NAV_LINKS } from '../config/Constants'
 import { LogoutModal } from '../modals/SharedModals'
+import Cookies from 'universal-cookie'
+
+const cookies = new Cookies()
 
 function Sidebar() {
     const navigate = useNavigate()
     const [logoutOpen, setLogoutOpen] = useState(false)
+
+    const handleLogout = () => {
+        cookies.remove('TOKEN', { path: '/' })
+        localStorage.removeItem('user')
+        navigate('/')
+    }
 
     const getLinkClassName = (isActive) => {
         return isActive
@@ -60,7 +69,7 @@ function Sidebar() {
             <LogoutModal
                 open={logoutOpen}
                 onClose={() => setLogoutOpen(false)}
-                onConfirm={() => navigate('/')}
+                onConfirm={handleLogout}
             />
         </>
     )
