@@ -6,6 +6,8 @@ const {
   updatePrescription,
   deletePrescription,
 } = require('../Model/prescriptionModel');
+const { findMedicineById } = require('../Model/medicineModel');
+const { createNotification } = require('../Model/notificationModel');
 
 const PrescriptionController = {
 
@@ -49,6 +51,18 @@ const PrescriptionController = {
       }
       const insertId = await createPrescription({ visit_id, medicine_id, quantity });
       response.status(201).json({ message: 'Prescription created', data: { prescription_id: insertId, ...request.body } });
+      // Fire-and-forget: create activity notification
+      findMedicineById(medicine_id).then(med => {
+        const name = med?.name || `Medicine #${medicine_id}`;
+        createNotification({
+          type: 'success',
+          icon: 'medication',
+          title: `Prescription Dispensed: ${name}`,
+          description: `${quantity} unit(s) of ${name} dispensed from clinic inventory.`,
+          source: 'prescription',
+          source_id: insertId,
+        }).catch(() => {});
+      }).catch(() => {});
     } catch (err) {
       response.status(500).json({ error: err.message });
     }

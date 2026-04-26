@@ -1,12 +1,34 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import NotificationsModal from '../pages/NotificationsModal'
+import { config, endpoints } from '../config/config'
 
-const DEFAULT_AVATAR = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBYNJS2j9zKN5JENqHQe6xAmOZtg1qgKXAgMb2l-UwwZSdhnNHKTiPfGCxzEBDiw6Tzae9bIBdt7ceUR43ZQAaqGevOgl0oP0CzjBr0BjAzlAHdal9jyhtxnycsVLqAphOZuGBAy39XEbM7E1PH-jWiycWODCh6_nOeyOpoRWuMjltNNXk-rmXiGggbPR8RDzCoDCi9VqR6BEp1W1gJBo-4NbFzBFwMHMpMtJhiusfzBO9Yd1jQNqu7rVp0zLXk81KmMH57-XNS-vk'
-
-function Header({ children, hasSearch = false, searchPlaceholder = 'Search...', userName = 'Sarah Miller', userAvatar = DEFAULT_AVATAR }) {
+function Header({ children, hasSearch = false, searchPlaceholder = 'Search...' }) {
     const navigate = useNavigate()
     const [notifOpen, setNotifOpen] = useState(false)
+    const [notifications, setNotifications] = useState([])
+
+    const user = useMemo(() => {
+        try { return JSON.parse(localStorage.getItem('user')) || {} } catch { return {} }
+    }, [])
+
+    const getInitials = (name = '') => {
+        const parts = name.trim().split(/\s+/)
+        if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+        return name.slice(0, 2).toUpperCase() || 'U'
+    }
+
+    const fetchNotifications = useCallback(async () => {
+        try {
+            const res = await axios.get(`${config.uniClinicAPI}${endpoints.notifications}`)
+            setNotifications(res.data)
+        } catch { /* silently fail */ }
+    }, [])
+
+    useEffect(() => { fetchNotifications() }, [fetchNotifications])
+
+    const unreadCount = notifications.filter(n => !n.is_read).length
 
     return (
         <>
@@ -37,7 +59,11 @@ function Header({ children, hasSearch = false, searchPlaceholder = 'Search...', 
                             <span className="material-symbols-outlined" data-icon="notifications">notifications</span>
                         </button>
                         {/* Unread badge */}
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-error border-2 border-white"></span>
+                        {unreadCount > 0 && (
+                            <span className="absolute top-1 right-1 min-w-[18px] h-[18px] rounded-full bg-error border-2 border-white flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-white leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                            </span>
+                        )}
                     </div>
 
                     {/* Settings */}
@@ -53,9 +79,9 @@ function Header({ children, hasSearch = false, searchPlaceholder = 'Search...', 
                     <button
                         id="header-profile-btn"
                         onClick={() => navigate('/profile')}
-                        className="h-10 w-10 rounded-full overflow-hidden ml-2 border-2 border-primary-fixed hover:border-primary transition-all"
+                        className="h-10 w-10 rounded-full overflow-hidden ml-2 border-2 border-primary-fixed hover:border-primary transition-all bg-primary-container flex items-center justify-center"
                     >
-                        <img className="w-full h-full object-cover" src={userAvatar} alt={userName} />
+                        <span className="text-sm font-bold text-on-primary-container">{getInitials(user.name)}</span>
                     </button>
                 </div>
             </header>
@@ -72,6 +98,8 @@ function Header({ children, hasSearch = false, searchPlaceholder = 'Search...', 
                 open={notifOpen}
                 onClose={() => setNotifOpen(false)}
                 onViewAll={() => navigate('/notifications')}
+                notifications={notifications}
+                onRefresh={fetchNotifications}
             />
         </>
     )

@@ -1,19 +1,94 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
-import { useNavigate } from 'react-router-dom';
+import { config, endpoints } from '../config/config';
 
 const DEFAULT_AVATAR = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBYNJS2j9zKN5JENqHQe6xAmOZtg1qgKXAgMb2l-UwwZSdhnNHKTiPfGCxzEBDiw6Tzae9bIBdt7ceUR43ZQAaqGevOgl0oP0CzjBr0BjAzlAHdal9jyhtxnycsVLqAphOZuGBAy39XEbM7E1PH-jWiycWODCh6_nOeyOpoRWuMjltNNXk-rmXiGggbPR8RDzCoDCi9VqR6BEp1W1gJBo-4NbFzBFwMHMpMtJhiusfzBO9Yd1jQNqu7rVp0zLXk81KmMH57-XNS-vk';
 
+const getInitials = (name = '') => name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+
+const fmtDateTime = (iso) => {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true,
+    });
+};
+
 const Profile = () => {
-    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
+    const [staffData, setStaffData] = useState(null);
+    const [visits, setVisits] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [editEmail, setEditEmail] = useState(false);
+    const [emailInput, setEmailInput] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    // Read logged-in user from localStorage
+    const localUser = (() => {
+        try { return JSON.parse(localStorage.getItem('user')) || {}; } catch { return {}; }
+    })();
+
+    useEffect(() => {
+        if (!localUser.staff_id) { setLoading(false); return; }
+        const fetchData = async () => {
+            try {
+                const [sRes, vRes] = await Promise.all([
+                    axios.get(`${config.uniClinicAPI}${endpoints.staff}/${localUser.staff_id}`),
+                    axios.get(`${config.uniClinicAPI}${endpoints.visits}`),
+                ]);
+                setStaffData(sRes.data);
+                setEmailInput(sRes.data.email || '');
+                setVisits(vRes.data);
+            } catch (err) {
+                console.error('Failed to load profile data', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const handleSaveEmail = async () => {
+        if (!localUser.staff_id) return;
+        setSaving(true);
+        try {
+            await axios.put(`${config.uniClinicAPI}${endpoints.staff}/${localUser.staff_id}`, { email: emailInput });
+            setStaffData(prev => ({ ...prev, email: emailInput }));
+            setEditEmail(false);
+        } catch (err) {
+            console.error('Failed to save email', err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Stats derived from visits
+    const myVisits = visits.filter(v => v.staff_id === localUser.staff_id || v.staff_id === staffData?.staff_id);
+    const uniqueStudents = new Set(myVisits.map(v => v.student_id)).size;
 
     const tabs = [
         { id: 'overview', label: 'Overview' },
-        { id: 'credentials', label: 'Credentials' },
         { id: 'access', label: 'Access History' },
     ];
+
+    if (loading) {
+        return (
+            <>
+                <Sidebar />
+                <main className="flex-1 ml-72 min-h-screen flex items-center justify-center">
+                    <span className="text-on-surface-variant text-lg">Loading profile...</span>
+                </main>
+            </>
+        );
+    }
+
+    const displayName = staffData?.name || localUser.name || 'Unknown User';
+    const displayRole = staffData?.role || localUser.role || '—';
+    const displayUsername = staffData?.username || localUser.username || '—';
+    const displayEmail = staffData?.email || null;
+    const lastActive = staffData?.last_active || null;
 
     return (
         <>
@@ -29,52 +104,48 @@ const Profile = () => {
                     </div>
                     <div className="relative z-10 px-8 pt-12 pb-24">
                         <p className="text-primary-container font-bold tracking-widest text-xs uppercase mb-2">User Profile</p>
-                        <h1 className="font-manrope text-4xl font-black text-on-primary tracking-tight">Dr. Sarah Miller</h1>
-                        <p className="text-on-primary/70 mt-1 font-medium">Senior Practitioner • UniClinic Health Services</p>
+                        <h1 className="font-manrope text-4xl font-black text-on-primary tracking-tight capitalize">{displayName}</h1>
+                        <p className="text-on-primary/70 mt-1 font-medium capitalize">{displayRole} &bull; UniClinic Health Services</p>
                     </div>
                 </div>
 
-                {/* Profile Card floated up */}
+                {/* Profile Card */}
                 <section className="px-8 -mt-12 mb-8 relative z-10">
                     <div className="bg-surface-container-lowest rounded-2xl shadow-lg p-8 flex items-center gap-8">
                         <div className="relative flex-shrink-0">
-                            <img
-                                src={DEFAULT_AVATAR}
-                                alt="Dr. Sarah Miller"
-                                className="w-24 h-24 rounded-2xl object-cover border-4 border-white shadow-md"
-                            />
+                            <div className="w-24 h-24 rounded-2xl bg-primary-container flex items-center justify-center border-4 border-white shadow-md">
+                                <span className="text-3xl font-black text-on-primary-container">{getInitials(displayName)}</span>
+                            </div>
                             <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-primary border-2 border-white"></span>
                         </div>
                         <div className="flex-1">
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <h2 className="font-manrope text-2xl font-black text-on-surface">Sarah Miller-West</h2>
-                                    <p className="text-on-surface-variant font-medium">Senior Clinical Practitioner</p>
+                                    <h2 className="font-manrope text-2xl font-black text-on-surface capitalize">{displayName}</h2>
+                                    <p className="text-on-surface-variant font-medium capitalize">{displayRole}</p>
                                     <div className="flex items-center gap-4 mt-3">
                                         <span className="inline-flex items-center gap-1.5 bg-primary-container/20 text-primary px-3 py-1 rounded-full text-xs font-bold">
                                             <span className="material-symbols-outlined text-sm">badge</span>
-                                            CC-8829-NW
+                                            ID #{staffData?.staff_id || localUser.staff_id}
                                         </span>
-                                        <span className="inline-flex items-center gap-1.5 bg-surface-container text-on-surface-variant px-3 py-1 rounded-full text-xs font-bold">
-                                            <span className="material-symbols-outlined text-sm">school</span>
-                                            6 Years Tenure
-                                        </span>
+                                        {lastActive && (
+                                            <span className="inline-flex items-center gap-1.5 bg-surface-container text-on-surface-variant px-3 py-1 rounded-full text-xs font-bold">
+                                                <span className="material-symbols-outlined text-sm">schedule</span>
+                                                Last login: {fmtDateTime(lastActive)}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
-                                <button className="flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full font-bold text-sm hover:bg-primary-dim transition-all shadow-lg shadow-primary/20">
-                                    <span className="material-symbols-outlined text-[18px]">edit</span>
-                                    Edit Profile
-                                </button>
                             </div>
                         </div>
                         {/* Quick stats */}
                         <div className="hidden lg:flex items-center gap-8 border-l border-outline-variant/20 pl-8">
                             <div className="text-center">
-                                <p className="text-3xl font-black font-manrope text-on-surface">1,240</p>
-                                <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-1">Students Managed</p>
+                                <p className="text-3xl font-black font-manrope text-on-surface">{uniqueStudents.toLocaleString()}</p>
+                                <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-1">Students Seen</p>
                             </div>
                             <div className="text-center">
-                                <p className="text-3xl font-black font-manrope text-on-surface">4,892</p>
+                                <p className="text-3xl font-black font-manrope text-on-surface">{myVisits.length.toLocaleString()}</p>
                                 <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-1">Visits Handled</p>
                             </div>
                         </div>
@@ -112,12 +183,12 @@ const Profile = () => {
                                     <span className="material-symbols-outlined text-primary">person</span>
                                     Personal Details
                                 </h3>
-                                <div className="space-y-5">
+                                <div className="space-y-4">
                                     {[
-                                        { label: 'Full Name', value: 'Sarah Miller-West', icon: 'badge' },
-                                        { label: 'Staff ID', value: 'CC-8829-NW', icon: 'tag' },
-                                        { label: 'Email Address', value: 's.miller@curatedcare.edu', icon: 'mail' },
-                                        { label: 'Phone Number', value: '+1 (555) 234-8910', icon: 'phone' },
+                                        { label: 'Full Name', value: displayName, icon: 'badge' },
+                                        { label: 'Staff ID', value: `#${staffData?.staff_id || localUser.staff_id}`, icon: 'tag' },
+                                        { label: 'Role', value: displayRole, icon: 'verified_user', capitalize: true },
+                                        { label: 'Username', value: displayUsername, icon: 'alternate_email' },
                                     ].map(item => (
                                         <div key={item.label} className="flex items-center gap-4 p-4 bg-surface-container-low rounded-xl">
                                             <div className="w-10 h-10 rounded-xl bg-secondary-container flex items-center justify-center flex-shrink-0">
@@ -125,61 +196,74 @@ const Profile = () => {
                                             </div>
                                             <div>
                                                 <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">{item.label}</p>
-                                                <p className="font-semibold text-on-surface mt-0.5">{item.value}</p>
+                                                <p className={`font-semibold text-on-surface mt-0.5 ${item.capitalize ? 'capitalize' : ''}`}>{item.value}</p>
                                             </div>
                                         </div>
                                     ))}
+
+                                    {/* Email row — editable */}
+                                    <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-xl">
+                                        <div className="w-10 h-10 rounded-xl bg-secondary-container flex items-center justify-center flex-shrink-0">
+                                            <span className="material-symbols-outlined text-on-secondary-container text-[18px]">mail</span>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Email Address</p>
+                                            {editEmail ? (
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <input
+                                                        type="email"
+                                                        value={emailInput}
+                                                        onChange={e => setEmailInput(e.target.value)}
+                                                        className="flex-1 bg-surface rounded-lg px-3 py-1.5 text-sm border border-outline-variant/30 focus:ring-2 focus:ring-primary/20 outline-none"
+                                                        placeholder="your@email.com"
+                                                    />
+                                                    <button
+                                                        onClick={handleSaveEmail}
+                                                        disabled={saving}
+                                                        className="px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold disabled:opacity-50"
+                                                    >{saving ? 'Saving...' : 'Save'}</button>
+                                                    <button
+                                                        onClick={() => { setEditEmail(false); setEmailInput(staffData?.email || ''); }}
+                                                        className="px-3 py-1.5 bg-surface-container text-on-surface-variant rounded-lg text-xs font-bold"
+                                                    >Cancel</button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-3 mt-0.5">
+                                                    <p className="font-semibold text-on-surface">{displayEmail || <span className="text-on-surface-variant italic font-normal">Not set</span>}</p>
+                                                    <button
+                                                        onClick={() => setEditEmail(true)}
+                                                        className="text-primary text-xs font-bold hover:underline"
+                                                    >{displayEmail ? 'Edit' : 'Add'}</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Quick Info cards */}
+                            {/* Right column */}
                             <div className="col-span-12 lg:col-span-5 space-y-6">
                                 <div className="bg-primary text-on-primary rounded-2xl p-8 relative overflow-hidden">
                                     <div className="absolute -right-10 -bottom-10 w-32 h-32 rounded-full bg-white/10"></div>
                                     <span className="material-symbols-outlined text-3xl mb-4 block" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
                                     <p className="text-xs font-bold uppercase tracking-widest text-on-primary/70 mb-1">Current Role</p>
-                                    <h4 className="text-xl font-bold">Senior Practitioner</h4>
-                                    <p className="text-on-primary/70 text-sm mt-1">Oakwood High School Clinic</p>
+                                    <h4 className="text-xl font-bold capitalize">{displayRole}</h4>
+                                    <p className="text-on-primary/70 text-sm mt-1">UniClinic Health Services</p>
                                 </div>
 
                                 <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-sm">
-                                    <h4 className="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-4">Need to update credentials?</h4>
-                                    <p className="text-on-surface-variant text-sm leading-relaxed mb-5">Contact the Human Resources portal to update your licensing or primary workplace location.</p>
-                                    <button className="flex items-center gap-2 text-primary font-bold text-sm hover:underline">
-                                        Visit HR Portal
-                                        <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                                    </button>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="bg-surface-container-low rounded-xl p-5 text-center">
+                                            <p className="text-2xl font-black text-on-surface">{uniqueStudents}</p>
+                                            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-1">Students Seen</p>
+                                        </div>
+                                        <div className="bg-surface-container-low rounded-xl p-5 text-center">
+                                            <p className="text-2xl font-black text-on-surface">{myVisits.length}</p>
+                                            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-1">Visits Handled</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'credentials' && (
-                        <div className="space-y-4">
-                            {[
-                                { title: 'Registered Nurse (RN)', issuer: 'Board of Nursing', detail: 'License #RN-299301-A', status: 'active', icon: 'medical_services' },
-                                { title: 'M.S. in Nursing (MSN)', issuer: 'State University Health Sciences', detail: '2015', status: 'active', icon: 'school' },
-                                { title: 'Pediatric Advanced Life Support (PALS)', issuer: 'American Heart Association', detail: 'Expires September 2025', status: 'expiring', icon: 'favorite' },
-                                { title: 'Basic Life Support (BLS)', issuer: 'American Heart Association', detail: 'Cert #BLS-2023-441', status: 'active', icon: 'health_and_safety' },
-                            ].map(cred => (
-                                <div key={cred.title} className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm flex items-center gap-6">
-                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${cred.status === 'expiring' ? 'bg-tertiary-container' : 'bg-primary-container/20'}`}>
-                                        <span className={`material-symbols-outlined text-2xl ${cred.status === 'expiring' ? 'text-on-tertiary-container' : 'text-primary'}`}>{cred.icon}</span>
-                                    </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-bold text-on-surface">{cred.title}</h4>
-                                        <p className="text-sm text-on-surface-variant">{cred.issuer}</p>
-                                        <p className="text-xs font-medium text-on-surface-variant mt-1">{cred.detail}</p>
-                                    </div>
-                                    <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                                        cred.status === 'expiring'
-                                            ? 'bg-tertiary-container text-on-tertiary-container'
-                                            : 'bg-primary-container/20 text-primary'
-                                    }`}>
-                                        {cred.status === 'expiring' ? 'Expiring Soon' : 'Active'}
-                                    </span>
-                                </div>
-                            ))}
                         </div>
                     )}
 
@@ -187,32 +271,46 @@ const Profile = () => {
                         <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden">
                             <div className="px-8 py-6 bg-surface-container-low/50 flex items-center gap-3">
                                 <span className="material-symbols-outlined text-primary">history</span>
-                                <h3 className="font-bold text-on-surface">Recent Login & Activity History</h3>
+                                <h3 className="font-bold text-on-surface">Login & Activity History</h3>
                             </div>
                             <div className="divide-y divide-surface-container">
-                                {[
-                                    { action: 'System Login', detail: 'Today, 08:30 AM', extra: 'IP: 192.168.1.45', icon: 'login', type: 'success' },
-                                    { action: 'Password Updated', detail: 'Oct 12, 2023', extra: '04:15 PM', icon: 'lock', type: 'info' },
-                                    { action: 'Inventory Audit', detail: 'Oct 10, 2023', extra: '11:20 AM', icon: 'inventory_2', type: 'info' },
-                                    { action: 'Student Record Accessed', detail: 'Oct 09, 2023', extra: '02:45 PM — Student ID #4412', icon: 'person_search', type: 'info' },
-                                    { action: 'Failed Login Attempt', detail: 'Oct 08, 2023', extra: 'IP: 203.0.113.99 (blocked)', icon: 'gpp_bad', type: 'error' },
-                                ].map((entry, i) => (
-                                    <div key={i} className="px-8 py-5 flex items-center gap-5 hover:bg-surface-container-low/30 transition-colors">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                            entry.type === 'success' ? 'bg-primary-container/20' :
-                                            entry.type === 'error' ? 'bg-error-container/20' : 'bg-secondary-container/20'
-                                        }`}>
-                                            <span className={`material-symbols-outlined text-[18px] ${
-                                                entry.type === 'success' ? 'text-primary' :
-                                                entry.type === 'error' ? 'text-error' : 'text-secondary'
-                                            }`}>{entry.icon}</span>
+                                {lastActive ? (
+                                    <div className="px-8 py-5 flex items-center gap-5">
+                                        <div className="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center flex-shrink-0">
+                                            <span className="material-symbols-outlined text-[18px] text-primary">login</span>
                                         </div>
                                         <div className="flex-1">
-                                            <p className="font-semibold text-on-surface text-sm">{entry.action}</p>
-                                            <p className="text-xs text-on-surface-variant">{entry.detail} &bull; {entry.extra}</p>
+                                            <p className="font-semibold text-on-surface text-sm">Last System Login</p>
+                                            <p className="text-xs text-on-surface-variant">{fmtDateTime(lastActive)}</p>
                                         </div>
+                                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-primary-container/20 text-primary">Verified</span>
                                     </div>
-                                ))}
+                                ) : (
+                                    <div className="px-8 py-5 flex items-center gap-5">
+                                        <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center flex-shrink-0">
+                                            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">login</span>
+                                        </div>
+                                        <p className="text-sm text-on-surface-variant">No login recorded yet.</p>
+                                    </div>
+                                )}
+                                <div className="px-8 py-5 flex items-center gap-5">
+                                    <div className="w-10 h-10 rounded-full bg-secondary-container/20 flex items-center justify-center flex-shrink-0">
+                                        <span className="material-symbols-outlined text-[18px] text-secondary">medical_services</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="font-semibold text-on-surface text-sm">Total Visits Handled</p>
+                                        <p className="text-xs text-on-surface-variant">{myVisits.length} visit{myVisits.length !== 1 ? 's' : ''} attributed to your account</p>
+                                    </div>
+                                </div>
+                                <div className="px-8 py-5 flex items-center gap-5">
+                                    <div className="w-10 h-10 rounded-full bg-secondary-container/20 flex items-center justify-center flex-shrink-0">
+                                        <span className="material-symbols-outlined text-[18px] text-secondary">groups</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="font-semibold text-on-surface text-sm">Unique Students Seen</p>
+                                        <p className="text-xs text-on-surface-variant">{uniqueStudents} unique student{uniqueStudents !== 1 ? 's' : ''} across all your visits</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}

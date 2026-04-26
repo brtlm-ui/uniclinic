@@ -5,6 +5,7 @@ const {
   updateVisit,
   deleteVisit,
 } = require('../Model/visitModel');
+const { createNotification } = require('../Model/notificationModel');
 
 const VisitController = {
 
@@ -38,6 +39,19 @@ const VisitController = {
       }
       const insertId = await createVisit({ student_id, staff_id, visit_date, visit_time, reason, diagnosis, status });
       response.status(201).json({ message: 'Visit created', data: { visit_id: insertId, ...request.body } });
+      // Fire-and-forget: create activity notification
+      findVisitById(insertId).then(visit => {
+        const studentName = visit?.student_name || `Student #${student_id}`;
+        const reasonText = reason ? ` Reason: ${reason}.` : '';
+        createNotification({
+          type: 'info',
+          icon: 'event_note',
+          title: `New Visit: ${studentName}`,
+          description: `A new clinic visit has been recorded for ${studentName}.${reasonText}`,
+          source: 'visit',
+          source_id: insertId,
+        }).catch(() => {});
+      }).catch(() => {});
     } catch (err) {
       response.status(500).json({ error: err.message });
     }

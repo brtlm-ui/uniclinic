@@ -9,15 +9,18 @@ const { initStudentsTable }      = require('./Components/Model/studentModel');
 const { initVisitsTable }        = require('./Components/Model/visitModel');
 const { initMedicinesTable }     = require('./Components/Model/medicineModel');
 const { initPrescriptionsTable } = require('./Components/Model/prescriptionModel');
-const { initTreatmentsTable }    = require('./Components/Model/treatmentModel');
+const { initTreatmentsTable }      = require('./Components/Model/treatmentModel');
+const { initNotificationsTable,
+        generateSystemNotifications } = require('./Components/Model/notificationModel');
 
 // Routes
-const userRoutes         = require('./Components/Router/userRoutes');
-const studentRoutes      = require('./Components/Router/studentRoutes');
-const visitRoutes        = require('./Components/Router/visitRoutes');
-const medicineRoutes     = require('./Components/Router/medicineRoutes');
-const prescriptionRoutes = require('./Components/Router/prescriptionRoutes');
-const treatmentRoutes    = require('./Components/Router/treatmentRoutes');
+const userRoutes             = require('./Components/Router/userRoutes');
+const studentRoutes          = require('./Components/Router/studentRoutes');
+const visitRoutes            = require('./Components/Router/visitRoutes');
+const medicineRoutes         = require('./Components/Router/medicineRoutes');
+const prescriptionRoutes     = require('./Components/Router/prescriptionRoutes');
+const treatmentRoutes        = require('./Components/Router/treatmentRoutes');
+const notificationRoutes     = require('./Components/Router/notificationRoutes');
 
 const app = express()
 const port = process.env.PORT || 5000;
@@ -50,6 +53,7 @@ app.use('/api/visits',        visitRoutes);
 app.use('/api/medicines',     medicineRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/treatments',    treatmentRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Listen on enviroment port or 5000
 async function startServer() {
@@ -62,8 +66,10 @@ async function startServer() {
   await initMedicinesTable();
   await initPrescriptionsTable(); // depends on visits + medicines
   await initTreatmentsTable();    // depends on visits
+  await initNotificationsTable();
+  await generateSystemNotifications();
 
-  app.listen(port, () => console.log(`Listening on port ${port}`));
+  app.listen(port, () => console.log(`Server running on port ${port}`));
 }
 
 startServer();

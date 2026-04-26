@@ -3,6 +3,15 @@ import { Navigate, Outlet } from "react-router-dom";
 import Cookies from "universal-cookie";
 import { jwtDecode } from "jwt-decode";
 
+export const RoleRoute = ({ allowedRoles }) => {
+    const role = useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user'))?.role || ''
+        } catch { return '' }
+    }, [])
+    return allowedRoles.includes(role) ? <Outlet /> : <Navigate to="/dashboard" replace />
+}
+
 const cookies = new Cookies();
 
 const ProtectedRoutes = () => {

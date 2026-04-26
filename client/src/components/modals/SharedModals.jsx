@@ -164,28 +164,33 @@ export function ViewStudentModal({ open, onClose, student }) {
 /* ─────────────────────────────────────────────────────────────
    ADD / EDIT STUDENT MODAL
 ───────────────────────────────────────────────────────────── */
-export function AddEditStudentModal({ open, onClose, student = null }) {
+export function AddEditStudentModal({ open, onClose, student = null, onSubmit }) {
     const isEdit = !!student;
-    const [form, setForm] = useState({ name: '', email: '', course: '', year: '' });
+    const [form, setForm] = useState({ student_number: '', first_name: '', last_name: '', course: '', year_level: '' });
 
     useEffect(() => {
-        if (student) setForm({ name: student.name || '', email: student.email || '', course: student.course || '', year: student.year || '' });
-        else setForm({ name: '', email: '', course: '', year: '' });
+        if (student) setForm({ student_number: student.student_number || '', first_name: student.first_name || '', last_name: student.last_name || '', course: student.course || '', year_level: student.year_level || '' });
+        else setForm({ student_number: '', first_name: '', last_name: '', course: '', year_level: '' });
     }, [student, open]);
 
-    const handleSubmit = (e) => { e.preventDefault(); alert(`${isEdit ? 'Updated' : 'Added'}: ${form.name}`); onClose(); };
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit?.(form); onClose(); };
 
     return (
         <ModalShell open={open} onClose={onClose} maxWidth="max-w-lg">
             <ModalHeader icon={isEdit ? 'edit' : 'person_add'} title={isEdit ? 'Edit Student Record' : 'New Student Record'} subtitle="Fill in the student information below" onClose={onClose} />
             <form onSubmit={handleSubmit}>
                 <div className="p-8 space-y-5">
-                    <FormRow label="Full Name">
-                        <input className={inputCls} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Elena Marasigan" required />
+                    <FormRow label="Student Number">
+                        <input className={inputCls} value={form.student_number} onChange={e => setForm({ ...form, student_number: e.target.value })} placeholder="e.g. 2024-00122" required />
                     </FormRow>
-                    <FormRow label="Email Address">
-                        <input type="email" className={inputCls} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="e.g. elena.m@university.edu" />
-                    </FormRow>
+                    <div className="grid grid-cols-2 gap-4">
+                        <FormRow label="First Name">
+                            <input className={inputCls} value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} placeholder="e.g. Elena" required />
+                        </FormRow>
+                        <FormRow label="Last Name">
+                            <input className={inputCls} value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} placeholder="e.g. Marasigan" required />
+                        </FormRow>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                         <FormRow label="Course">
                             <select className={selectCls} value={form.course} onChange={e => setForm({ ...form, course: e.target.value })} required>
@@ -198,12 +203,12 @@ export function AddEditStudentModal({ open, onClose, student = null }) {
                             </select>
                         </FormRow>
                         <FormRow label="Year Level">
-                            <select className={selectCls} value={form.year} onChange={e => setForm({ ...form, year: e.target.value })} required>
+                            <select className={selectCls} value={form.year_level} onChange={e => setForm({ ...form, year_level: e.target.value })} required>
                                 <option value="">Select year</option>
-                                <option>1st Year</option>
-                                <option>2nd Year</option>
-                                <option>3rd Year</option>
-                                <option>4th Year</option>
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
                             </select>
                         </FormRow>
                     </div>
@@ -251,50 +256,57 @@ export function ViewVisitModal({ open, onClose, visit }) {
 /* ─────────────────────────────────────────────────────────────
    ADD / EDIT VISIT MODAL
 ───────────────────────────────────────────────────────────── */
-export function AddEditVisitModal({ open, onClose, visit = null }) {
+export function AddEditVisitModal({ open, onClose, visit = null, onSubmit, students = [], staff = [] }) {
     const isEdit = !!visit;
-    const [form, setForm] = useState({ student: '', date: '', time: '', reason: '', status: 'Completed', staff: 'Nurse Miller' });
+    const [form, setForm] = useState({ student_id: '', staff_id: '', visit_date: '', visit_time: '', reason: '', diagnosis: '', status: 'ongoing' });
 
     useEffect(() => {
-        if (visit) setForm({ student: visit.student || '', date: visit.date || '', time: visit.time || '', reason: visit.reason || '', status: visit.status || 'Completed', staff: visit.staff || '' });
-        else setForm({ student: '', date: '', time: '', reason: '', status: 'Completed', staff: 'Nurse Miller' });
+        if (visit) setForm({ student_id: visit.student_id || '', staff_id: visit.staff_id || '', visit_date: visit.visit_date?.slice(0, 10) || '', visit_time: visit.visit_time || '', reason: visit.reason || '', diagnosis: visit.diagnosis || '', status: visit.status || 'ongoing' });
+        else setForm({ student_id: '', staff_id: '', visit_date: '', visit_time: '', reason: '', diagnosis: '', status: 'ongoing' });
     }, [visit, open]);
 
-    const handleSubmit = (e) => { e.preventDefault(); alert(`${isEdit ? 'Updated' : 'Logged'} visit for: ${form.student}`); onClose(); };
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit?.(form); onClose(); };
 
     return (
         <ModalShell open={open} onClose={onClose} maxWidth="max-w-lg">
             <ModalHeader icon={isEdit ? 'edit' : 'add_circle'} title={isEdit ? 'Edit Visit Record' : 'Log New Visit'} subtitle="Record clinic visit details below" onClose={onClose} />
             <form onSubmit={handleSubmit}>
                 <div className="p-8 space-y-5">
-                    <FormRow label="Student Name">
-                        <input className={inputCls} value={form.student} onChange={e => setForm({ ...form, student: e.target.value })} placeholder="e.g. Ethan Sterling" required />
+                    <FormRow label="Student">
+                        <select className={selectCls} value={form.student_id} onChange={e => setForm({ ...form, student_id: e.target.value })} required>
+                            <option value="">Select student</option>
+                            {students.map(s => (
+                                <option key={s.student_id} value={s.student_id}>{s.first_name} {s.last_name} — {s.student_number}</option>
+                            ))}
+                        </select>
                     </FormRow>
                     <div className="grid grid-cols-2 gap-4">
                         <FormRow label="Date">
-                            <input type="date" className={inputCls} value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required />
+                            <input type="date" className={inputCls} value={form.visit_date} onChange={e => setForm({ ...form, visit_date: e.target.value })} required />
                         </FormRow>
                         <FormRow label="Time">
-                            <input type="time" className={inputCls} value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} />
+                            <input type="time" className={inputCls} value={form.visit_time} onChange={e => setForm({ ...form, visit_time: e.target.value })} />
                         </FormRow>
                     </div>
-                    <FormRow label="Reason / Diagnosis">
+                    <FormRow label="Reason">
                         <input className={inputCls} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} placeholder="e.g. Recurring Migraine" required />
+                    </FormRow>
+                    <FormRow label="Diagnosis">
+                        <input className={inputCls} value={form.diagnosis} onChange={e => setForm({ ...form, diagnosis: e.target.value })} placeholder="e.g. Mild Dehydration" />
                     </FormRow>
                     <div className="grid grid-cols-2 gap-4">
                         <FormRow label="Status">
                             <select className={selectCls} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-                                <option>Completed</option>
-                                <option>In Progress</option>
-                                <option>Emergency</option>
-                                <option>Referred</option>
+                                <option value="ongoing">Ongoing</option>
+                                <option value="completed">Completed</option>
                             </select>
                         </FormRow>
                         <FormRow label="Attending Staff">
-                            <select className={selectCls} value={form.staff} onChange={e => setForm({ ...form, staff: e.target.value })}>
-                                <option>Nurse Miller</option>
-                                <option>Dr. Chen</option>
-                                <option>Dr. Julian Vane</option>
+                            <select className={selectCls} value={form.staff_id} onChange={e => setForm({ ...form, staff_id: e.target.value })}>
+                                <option value="">Select staff</option>
+                                {staff.map(s => (
+                                    <option key={s.staff_id} value={s.staff_id}>{s.name} ({s.role})</option>
+                                ))}
                             </select>
                         </FormRow>
                     </div>
@@ -370,16 +382,16 @@ export function AddEditMedicineModal({ open, onClose, medicine = null }) {
 /* ─────────────────────────────────────────────────────────────
    ADD / EDIT STAFF MODAL
 ───────────────────────────────────────────────────────────── */
-export function AddEditStaffModal({ open, onClose, staff = null }) {
+export function AddEditStaffModal({ open, onClose, staff = null, onSubmit }) {
     const isEdit = !!staff;
-    const [form, setForm] = useState({ name: '', role: '', username: '', email: '' });
+    const [form, setForm] = useState({ name: '', role: '', username: '', password: '' });
 
     useEffect(() => {
-        if (staff) setForm({ name: staff.name || '', role: staff.role || '', username: staff.username || '', email: staff.email || '' });
-        else setForm({ name: '', role: '', username: '', email: '' });
+        if (staff) setForm({ name: staff.name || '', role: staff.role || '', username: staff.username || '', password: '' });
+        else setForm({ name: '', role: '', username: '', password: '' });
     }, [staff, open]);
 
-    const handleSubmit = (e) => { e.preventDefault(); alert(`${isEdit ? 'Updated' : 'Registered'} staff: ${form.name}`); onClose(); };
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit?.(form); onClose(); };
 
     return (
         <ModalShell open={open} onClose={onClose} maxWidth="max-w-lg">
@@ -389,30 +401,67 @@ export function AddEditStaffModal({ open, onClose, staff = null }) {
                     <FormRow label="Full Name">
                         <input className={inputCls} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Dr. Julian Vane" required />
                     </FormRow>
-                    <FormRow label="Email Address">
-                        <input type="email" className={inputCls} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="e.g. j.vane@clinic.edu" />
-                    </FormRow>
                     <div className="grid grid-cols-2 gap-4">
                         <FormRow label="Role">
                             <select className={selectCls} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required>
                                 <option value="">Select role</option>
-                                <option>Doctor</option>
-                                <option>Nurse</option>
-                                <option>Pharmacist</option>
-                                <option>Administrator</option>
-                                <option>Medic</option>
+                                <option value="doctor">Doctor</option>
+                                <option value="nurse">Nurse</option>
+                                <option value="admin">Administrator</option>
                             </select>
                         </FormRow>
                         <FormRow label="Username">
                             <input className={inputCls} value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder="e.g. j.vane_clin" required />
                         </FormRow>
                     </div>
+                    {!isEdit && (
+                        <FormRow label="Password">
+                            <input type="password" className={inputCls} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Min. 6 characters" required />
+                        </FormRow>
+                    )}
                 </div>
                 <div className="px-8 pb-8 flex gap-3">
                     <button type="button" onClick={onClose} className="flex-1 py-3 rounded-full border border-outline-variant/30 text-on-surface-variant font-bold text-sm hover:bg-surface-container transition-all">Cancel</button>
                     <button type="submit" className="flex-1 py-3 rounded-full bg-primary text-on-primary font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary-dim transition-all active:scale-95">
                         {isEdit ? 'Save Changes' : 'Register Staff'}
                     </button>
+                </div>
+            </form>
+        </ModalShell>
+    );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ADD / EDIT TREATMENT MODAL
+───────────────────────────────────────────────────────────── */
+export function AddEditTreatmentModal({ open, onClose, treatment = null, onSubmit }) {
+    const isEdit = !!treatment;
+    const [form, setForm] = useState({ visit_id: '', treatment_given: '', notes: '' });
+    useEffect(() => {
+        if (treatment) setForm({ visit_id: treatment.visit_id ?? '', treatment_given: treatment.treatment_given ?? '', notes: treatment.notes ?? '' });
+        else setForm({ visit_id: '', treatment_given: '', notes: '' });
+    }, [treatment, open]);
+    const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit?.(form); onClose(); };
+    return (
+        <ModalShell open={open} onClose={onClose} maxWidth="max-w-lg">
+            <ModalHeader icon="healing" title={isEdit ? 'Edit Treatment Record' : 'New Treatment Record'} subtitle="Fill in the treatment details below" onClose={onClose} />
+            <form onSubmit={handleSubmit} className="p-8 space-y-5">
+                <div>
+                    <label className="block text-sm font-semibold text-on-surface-variant mb-2">Visit ID</label>
+                    <input className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary/20 transition-all text-sm" value={form.visit_id} onChange={set('visit_id')} required placeholder="e.g. 1" type="number" min="1" />
+                </div>
+                <div>
+                    <label className="block text-sm font-semibold text-on-surface-variant mb-2">Treatment Given</label>
+                    <input className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary/20 transition-all text-sm" value={form.treatment_given} onChange={set('treatment_given')} required placeholder="e.g. Nebulization Therapy" />
+                </div>
+                <div>
+                    <label className="block text-sm font-semibold text-on-surface-variant mb-2">Notes</label>
+                    <textarea className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary/20 transition-all text-sm resize-none" rows={3} value={form.notes} onChange={set('notes')} placeholder="Clinical notes..." />
+                </div>
+                <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={onClose} className="flex-1 py-3 rounded-full border border-outline-variant/30 text-on-surface-variant font-bold text-sm hover:bg-surface-container transition-all">Cancel</button>
+                    <button type="submit" className="flex-1 py-3 rounded-full bg-primary text-on-primary font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-all">{isEdit ? 'Save Changes' : 'Add Record'}</button>
                 </div>
             </form>
         </ModalShell>

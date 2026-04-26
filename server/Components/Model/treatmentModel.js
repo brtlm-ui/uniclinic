@@ -25,7 +25,15 @@ async function createTreatment({ visit_id, treatment_given, notes }) {
 
 async function findAllTreatments() {
   const db = getDB();
-  const [rows] = await db.query(`SELECT * FROM treatments ORDER BY treatment_id`);
+  const [rows] = await db.query(`
+    SELECT t.*,
+           v.visit_date, v.visit_time,
+           CONCAT(s.first_name, ' ', s.last_name) AS student_name
+    FROM treatments t
+    LEFT JOIN visits   v ON t.visit_id   = v.visit_id
+    LEFT JOIN students s ON v.student_id = s.student_id
+    ORDER BY t.treatment_id DESC
+  `);
   return rows;
 }
 

@@ -1,36 +1,95 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
+import { config, endpoints } from '../config/config';
 
-const monthlyData = [
-    { month: 'Jan', height: 45, count: 312 },
-    { month: 'Feb', height: 65, count: 408 },
-    { month: 'Mar', height: 85, count: 521 },
-    { month: 'Apr', height: 55, count: 360 },
-    { month: 'May', height: 100, count: 628 },
-    { month: 'Jun', height: 70, count: 445 },
-    { month: 'Jul', height: 40, count: 284 },
-    { month: 'Aug', height: 60, count: 392 },
-    { month: 'Sep', height: 80, count: 498 },
-    { month: 'Oct', height: 90, count: 572 },
-    { month: 'Nov', height: 50, count: 330 },
-    { month: 'Dec', height: 35, count: 241 },
-];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const weeklyData = [
-    { month: 'Mon', height: 55, count: 48 },
-    { month: 'Tue', height: 80, count: 72 },
-    { month: 'Wed', height: 100, count: 91 },
-    { month: 'Thu', height: 65, count: 58 },
-    { month: 'Fri', height: 90, count: 82 },
-    { month: 'Sat', height: 30, count: 24 },
-    { month: 'Sun', height: 15, count: 10 },
-];
+function buildMonthlyData(visits) {
+    const year = new Date().getFullYear();
+    const counts = Array(12).fill(0);
+    visits.forEach(v => {
+        const d = new Date(v.visit_date);
+        if (d.getFullYear() === year) counts[d.getMonth()]++;
+    });
+    const max = Math.max(...counts, 1);
+    return MONTH_NAMES.map((month, i) => ({ month, count: counts[i], height: Math.round((counts[i] / max) * 100) }));
+}
+
+function buildWeeklyData(visits) {
+    const today = new Date();
+    const dow = today.getDay();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+    startOfWeek.setHours(0, 0, 0, 0);
+    const counts = Array(7).fill(0);
+    visits.forEach(v => {
+        const d = new Date(v.visit_date);
+        d.setHours(0, 0, 0, 0);
+        const diff = Math.round((d - startOfWeek) / 86400000);
+        if (diff >= 0 && diff < 7) counts[diff]++;
+    });
+    const max = Math.max(...counts, 1);
+    return DAY_NAMES.map((month, i) => ({ month, count: counts[i], height: Math.round((counts[i] / max) * 100) }));
+}
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const [chartMode, setChartMode] = useState('monthly');
-    const chartData = chartMode === 'monthly' ? monthlyData : weeklyData;
     const [hoveredBar, setHoveredBar] = useState(null);
+
+    const emptyMonthly = MONTH_NAMES.map(m => ({ month: m, count: 0, height: 0 }));
+    const emptyWeekly = DAY_NAMES.map(m => ({ month: m, count: 0, height: 0 }));
+
+    const [stats, setStats] = useState({
+        studentCount: 0, todayVisits: 0, totalVisits: 0, lowStockCount: 0,
+        recentVisits: [], monthlyData: emptyMonthly, weeklyData: emptyWeekly,
+        peakMonthName: '—', peakMonthCount: 0, monthlyAvg: 0,
+    });
+
+    const chartData = chartMode === 'monthly' ? stats.monthlyData : stats.weeklyData;
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const [sRes, vRes, mRes] = await Promise.all([
+                    axios.get(`${config.uniClinicAPI}${endpoints.students}`),
+                    axios.get(`${config.uniClinicAPI}${endpoints.visits}`),
+                    axios.get(`${config.uniClinicAPI}${endpoints.medicines}`),
+                ]);
+                const students = sRes.data;
+                const visits = vRes.data;
+                const medicines = mRes.data;
+                const today = new Date().toDateString();
+                const todayVisits = visits.filter(v => new Date(v.visit_date).toDateString() === today).length;
+                const lowStockCount = medicines.filter(m => m.stock_quantity <= 20).length;
+                const recentVisits = [...visits].sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date)).slice(0, 5);
+
+                const monthlyData = buildMonthlyData(visits);
+                const weeklyData = buildWeeklyData(visits);
+
+                const peakIdx = monthlyData.reduce((best, d, i) => d.count > monthlyData[best].count ? i : best, 0);
+                const peakMonthName = monthlyData[peakIdx].count > 0 ? `${MONTH_NAMES[peakIdx]} ${new Date().getFullYear()}` : '—';
+                const peakMonthCount = monthlyData[peakIdx].count;
+                const monthlyAvg = Math.round(monthlyData.reduce((s, d) => s + d.count, 0) / 12);
+
+                setStats({
+                    studentCount: students.length, todayVisits, totalVisits: visits.length,
+                    lowStockCount, recentVisits, monthlyData, weeklyData,
+                    peakMonthName, peakMonthCount, monthlyAvg,
+                });
+            } catch {
+                // silently fail — dashboard stats are non-critical
+            }
+        };
+        fetchStats();
+    }, []);
+
+    const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+    const userName = user.name || 'Doctor';
 
     return (
         <>
@@ -44,9 +103,9 @@ const Dashboard = () => {
                         <div>
                             <p className="text-primary font-bold tracking-widest text-xs uppercase mb-3">Clinical Serenity Dashboard</p>
                             <h1 className="font-manrope text-5xl font-black text-on-surface tracking-tight leading-tight">
-                                Good morning, <span className="text-primary">Dr. Sarah Miller.</span>
+                                Good morning, <span className="text-primary">{userName}.</span>
                             </h1>
-                            <p className="mt-3 text-on-surface-variant text-lg font-medium">Today is a busy day with <span className="font-bold text-on-surface">14 scheduled check-ups</span>. Stay sharp.</p>
+                            <p className="mt-3 text-on-surface-variant text-lg font-medium">Today has <span className="font-bold text-on-surface">{stats.todayVisits} visit{stats.todayVisits !== 1 ? 's' : ''}</span> recorded so far.</p>
                         </div>
                         <div className="hidden xl:flex items-center gap-3 bg-surface-container-lowest rounded-2xl px-6 py-4 shadow-sm">
                             <span className="material-symbols-outlined text-primary text-2xl" data-icon="calendar_today">calendar_today</span>
@@ -63,7 +122,7 @@ const Dashboard = () => {
                     <div className="col-span-12 lg:col-span-5 bg-primary rounded-xl p-10 text-on-primary relative overflow-hidden flex flex-col justify-between min-h-[320px]">
                         <div className="relative z-10">
                             <span className="text-primary-container font-bold text-sm tracking-widest uppercase">Student Population</span>
-                            <div className="text-7xl font-black mt-4">1,248</div>
+                            <div className="text-7xl font-black mt-4">{stats.studentCount.toLocaleString()}</div>
                         </div>
                         <div className="relative z-10 flex items-center gap-4 bg-white/10 backdrop-blur-md rounded-full px-6 py-3 w-fit">
                             <span className="material-symbols-outlined text-primary-container" data-icon="trending_up">trending_up</span>
@@ -82,8 +141,8 @@ const Dashboard = () => {
                                 <span className="text-xs font-bold text-on-surface-variant">TODAY</span>
                             </div>
                             <div>
-                                <div className="text-4xl font-bold mb-1">32</div>
-                                <div className="text-on-surface-variant font-medium text-sm">Scheduled Visits</div>
+                                <div className="text-4xl font-bold mb-1">{stats.todayVisits}</div>
+                                <div className="text-on-surface-variant font-medium text-sm">Visits Today</div>
                             </div>
                         </div>
                         <div className="bg-surface-container-lowest p-8 rounded-xl shadow-sm flex flex-col justify-between border-l-4 border-primary">
@@ -94,8 +153,8 @@ const Dashboard = () => {
                                 <span className="text-xs font-bold text-on-surface-variant">TOTAL</span>
                             </div>
                             <div>
-                                <div className="text-4xl font-bold mb-1">4,892</div>
-                                <div className="text-on-surface-variant font-medium text-sm">Visits this Year</div>
+                                <div className="text-4xl font-bold mb-1">{stats.totalVisits.toLocaleString()}</div>
+                                <div className="text-on-surface-variant font-medium text-sm">Total Visits</div>
                             </div>
                         </div>
                         <div className="col-span-2 bg-error-container/10 p-8 rounded-xl flex items-center justify-between border border-error-container/20">
@@ -105,11 +164,11 @@ const Dashboard = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-2xl font-bold text-error-dim">Low Stock Alert</h3>
-                                    <p className="text-error-dim opacity-70">8 essential medicines require immediate restocking.</p>
+                                    <p className="text-error-dim opacity-70">{stats.lowStockCount > 0 ? `${stats.lowStockCount} essential medicine${stats.lowStockCount !== 1 ? 's' : ''} require immediate restocking.` : 'All medicines are sufficiently stocked.'}</p>
                                 </div>
                             </div>
                             <button
-                                onClick={() => window.location.hash = '/medicines'}
+                                onClick={() => navigate('/medicines')}
                                 className="bg-error-dim text-white px-8 py-4 rounded-full font-bold text-sm hover:scale-105 transition-transform"
                             >
                                 Manage Inventory
@@ -125,7 +184,7 @@ const Dashboard = () => {
                             <div>
                                 <h2 className="text-3xl font-extrabold tracking-tight mb-1">Visits Analysis</h2>
                                 <p className="text-on-surface-variant font-medium">
-                                    {chartMode === 'monthly' ? 'Monthly volume trends for 2024 — 12 months overview' : 'Weekly footfall breakdown — current week'}
+                                    {chartMode === 'monthly' ? `Monthly visit totals for ${new Date().getFullYear()} — 12 months overview` : 'Daily visit totals — current week'}
                                 </p>
                             </div>
                             <div className="flex items-center gap-6">
@@ -133,7 +192,7 @@ const Dashboard = () => {
                                 <div className="hidden lg:flex items-center gap-5 text-xs font-bold text-on-surface-variant">
                                     <div className="flex items-center gap-2">
                                         <span className="w-3 h-3 rounded-full bg-primary inline-block"></span>
-                                        Peak Month
+                                        {chartMode === 'monthly' ? 'Peak Month' : 'Peak Day'}
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="w-3 h-3 rounded-full bg-primary-container inline-block"></span>
@@ -156,14 +215,22 @@ const Dashboard = () => {
                         {/* Chart — taller, full width */}
                         <div className="relative h-72 flex items-end gap-3 px-2 pb-2">
                             {/* Y-axis grid lines */}
-                            <div className="absolute inset-x-2 top-0 bottom-10 flex flex-col justify-between pointer-events-none">
-                                {[100, 75, 50, 25].map(pct => (
-                                    <div key={pct} className="flex items-center gap-3">
-                                        <span className="text-[10px] font-bold text-on-surface-variant/50 w-8 text-right flex-shrink-0">{pct}%</span>
-                                        <div className="flex-1 border-t border-surface-container-high border-dashed"></div>
+                            {(() => {
+                                const chartMax = Math.max(...chartData.map(x => x.count), 1);
+                                const ticks = [1, 0.75, 0.5, 0.25];
+                                return (
+                                    <div className="absolute inset-x-2 top-0 bottom-10 flex flex-col justify-between pointer-events-none">
+                                        {ticks.map(t => (
+                                            <div key={t} className="flex items-center gap-3">
+                                                <span className="text-[10px] font-bold text-on-surface-variant/50 w-8 text-right flex-shrink-0">
+                                                    {Math.round(chartMax * t)}
+                                                </span>
+                                                <div className="flex-1 border-t border-surface-container-high border-dashed"></div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
+                                );
+                            })()}
 
                             {/* Bars */}
                             <div className="absolute inset-x-2 top-0 bottom-10 flex items-end gap-3 pl-12">
@@ -172,25 +239,25 @@ const Dashboard = () => {
                                     return (
                                         <div
                                             key={d.month}
-                                            className="flex-1 flex flex-col items-center gap-3 group cursor-pointer"
+                                            className="flex-1 h-full flex flex-col items-center gap-1 group cursor-pointer"
                                             onMouseEnter={() => setHoveredBar(i)}
                                             onMouseLeave={() => setHoveredBar(null)}
                                         >
                                             {/* Tooltip */}
-                                            <div className={`relative transition-all duration-200 ${hoveredBar === i ? 'opacity-100 -translate-y-1' : 'opacity-0'}`}>
+                                            <div className={`relative transition-all duration-200 flex-shrink-0 ${hoveredBar === i ? 'opacity-100 -translate-y-1' : 'opacity-0'}`}>
                                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-on-surface text-surface-container-lowest text-[11px] font-bold rounded-lg px-3 py-1.5 whitespace-nowrap shadow-xl">
                                                     {d.count} visits
                                                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-on-surface rotate-45 -mt-1"></div>
                                                 </div>
                                             </div>
                                             {/* Bar container */}
-                                            <div className="w-full bg-surface-container-high rounded-full overflow-hidden relative" style={{ height: '100%' }}>
+                                            <div className="w-full flex-1 bg-surface-container-high rounded-t-full overflow-hidden relative">
                                                 <div
-                                                    className={`absolute bottom-0 w-full rounded-t-full transition-all duration-700 ${isPeak ? 'bg-primary shadow-lg shadow-primary/30' : 'bg-primary-container group-hover:bg-primary/60'}`}
+                                                    className={`absolute bottom-0 w-full transition-all duration-700 ${isPeak ? 'bg-primary shadow-lg shadow-primary/30' : 'bg-primary-container group-hover:bg-primary/60'}`}
                                                     style={{ height: `${d.height}%` }}
                                                 ></div>
                                             </div>
-                                            <span className={`text-[11px] font-bold uppercase tracking-wider ${isPeak ? 'text-primary' : 'text-on-surface-variant'}`}>{d.month}</span>
+                                            <span className={`text-[11px] font-bold uppercase tracking-wider flex-shrink-0 ${isPeak ? 'text-primary' : 'text-on-surface-variant'}`}>{d.month}</span>
                                         </div>
                                     );
                                 })}
@@ -198,19 +265,41 @@ const Dashboard = () => {
                         </div>
 
                         {/* Chart footer stats */}
-                        <div className="mt-6 pt-6 border-t border-surface-container grid grid-cols-3 gap-6">
-                            {[
-                                { label: 'Peak Month', value: 'May 2024', sub: '628 visits' },
-                                { label: 'Monthly Average', value: '416 visits', sub: 'across 12 months' },
-                                { label: 'YTD Total', value: '4,991 visits', sub: '+18% vs 2023' },
-                            ].map(s => (
-                                <div key={s.label}>
-                                    <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">{s.label}</p>
-                                    <p className="font-bold text-on-surface">{s.value}</p>
-                                    <p className="text-xs text-on-surface-variant">{s.sub}</p>
-                                </div>
-                            ))}
-                        </div>
+                        {chartMode === 'monthly' ? (
+                            <div className="mt-6 pt-6 border-t border-surface-container grid grid-cols-3 gap-6">
+                                {[
+                                    { label: 'Peak Month', value: stats.peakMonthName, sub: `${stats.peakMonthCount} visits` },
+                                    { label: 'Monthly Average', value: `${stats.monthlyAvg} visits`, sub: 'across 12 months' },
+                                    { label: 'Total Visits', value: stats.totalVisits.toLocaleString(), sub: 'all time' },
+                                ].map(s => (
+                                    <div key={s.label}>
+                                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">{s.label}</p>
+                                        <p className="font-bold text-on-surface">{s.value}</p>
+                                        <p className="text-xs text-on-surface-variant">{s.sub}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="mt-6 pt-6 border-t border-surface-container grid grid-cols-3 gap-6">
+                                {(() => {
+                                    const wd = stats.weeklyData;
+                                    const peakDay = wd.reduce((best, d) => d.count > best.count ? d : best, wd[0] || { month: '—', count: 0 });
+                                    const weekTotal = wd.reduce((s, d) => s + d.count, 0);
+                                    const dailyAvg = Math.round(weekTotal / 7);
+                                    return [
+                                        { label: 'Peak Day', value: peakDay.month, sub: `${peakDay.count} visits` },
+                                        { label: 'Daily Average', value: `${dailyAvg} visits`, sub: 'this week' },
+                                        { label: 'Week Total', value: weekTotal.toString(), sub: 'visits this week' },
+                                    ].map(s => (
+                                        <div key={s.label}>
+                                            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">{s.label}</p>
+                                            <p className="font-bold text-on-surface">{s.value}</p>
+                                            <p className="text-xs text-on-surface-variant">{s.sub}</p>
+                                        </div>
+                                    ));
+                                })()}
+                            </div>
+                        )}
                     </div>
                 </section>
 
@@ -235,38 +324,44 @@ const Dashboard = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-surface-container">
-                                {[
-                                    { initials: 'JA', bg: 'bg-tertiary-container', fg: 'text-on-tertiary-container', name: 'Julian Anderson', date: 'Oct 14, 2024', time: '09:15 AM', reason: 'Allergic Reaction', statusBg: 'bg-error-container/20', statusFg: 'text-error', statusDot: 'bg-error', status: 'Urgent' },
-                                    { initials: 'EP', bg: 'bg-secondary-container', fg: 'text-on-secondary-container', name: 'Emma Peterson', date: 'Oct 14, 2024', time: '10:30 AM', reason: 'Routine Checkup', statusBg: 'bg-surface-container', statusFg: 'text-on-surface-variant', statusDot: 'bg-on-surface-variant', status: 'Scheduled' },
-                                    { initials: 'LM', bg: 'bg-primary-container', fg: 'text-on-primary-container', name: 'Liam Murphy', date: 'Oct 14, 2024', time: '11:45 AM', reason: 'Sports Injury', statusBg: 'bg-primary-container/20', statusFg: 'text-primary', statusDot: 'bg-primary', status: 'Completed' },
-                                ].map(row => (
-                                    <tr key={row.name} className="hover:bg-slate-50/50 transition-colors group">
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-10 h-10 rounded-full ${row.bg} flex items-center justify-center ${row.fg} font-bold text-xs`}>{row.initials}</div>
-                                                <span className="font-semibold">{row.name}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <div className="text-sm">{row.date}</div>
-                                            <div className="text-xs text-on-surface-variant font-medium">{row.time}</div>
-                                        </td>
-                                        <td className="px-8 py-6"><span className="text-sm font-medium">{row.reason}</span></td>
-                                        <td className="px-8 py-6">
-                                            <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full ${row.statusBg} ${row.statusFg} font-bold text-[10px] uppercase`}>
-                                                <span className={`w-1.5 h-1.5 rounded-full ${row.statusDot}`}></span>
-                                                {row.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-8 py-6 text-right">
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => window.location.hash = '/visits'} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all" title="View visit">
-                                                    <span className="material-symbols-outlined text-[20px]">open_in_new</span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {stats.recentVisits.length === 0 ? (
+                                    <tr><td colSpan={5} className="px-8 py-10 text-center text-on-surface-variant">No visits yet.</td></tr>
+                                ) : stats.recentVisits.map(row => {
+                                    const initials = (row.student_name || '??').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+                                    const statusStyle = row.status === 'completed'
+                                        ? { bg: 'bg-primary-container/20', fg: 'text-primary', dot: 'bg-primary', label: 'Completed' }
+                                        : { bg: 'bg-secondary-container/30', fg: 'text-on-surface-variant', dot: 'bg-on-surface-variant', label: 'Ongoing' };
+                                    const dateStr = row.visit_date ? new Date(row.visit_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+                                    const timeStr = row.visit_time ? row.visit_time.slice(0, 5) : '—';
+                                    return (
+                                        <tr key={row.visit_id} className="hover:bg-slate-50/50 transition-colors group">
+                                            <td className="px-8 py-6">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container font-bold text-xs">{initials}</div>
+                                                    <span className="font-semibold">{row.student_name || `Student #${row.student_id}`}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                <div className="text-sm">{dateStr}</div>
+                                                <div className="text-xs text-on-surface-variant font-medium">{timeStr}</div>
+                                            </td>
+                                            <td className="px-8 py-6"><span className="text-sm font-medium">{row.reason || '—'}</span></td>
+                                            <td className="px-8 py-6">
+                                                <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full ${statusStyle.bg} ${statusStyle.fg} font-bold text-[10px] uppercase`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`}></span>
+                                                    {statusStyle.label}
+                                                </span>
+                                            </td>
+                                            <td className="px-8 py-6 text-right">
+                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => window.location.hash = '/visits'} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all" title="View visit">
+                                                        <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

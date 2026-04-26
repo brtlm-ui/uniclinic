@@ -1,23 +1,99 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
 import { AddEditMedicineModal, ConfirmDeleteModal } from '../modals/SharedModals';
+import { config, endpoints } from '../config/config';
 
-const MEDICINES = [
-    { name: 'Amoxicillin 500mg', category: 'Antibiotic / Capsule', quantity: '450', expiryDate: '2025-10-12', status: 'OK Status', statusBg: 'bg-tertiary-container text-on-tertiary-container', icon: 'pill' },
-    { name: 'Paracetamol Syrup', category: 'Analgesic / 100ml Bottle', quantity: '12', expiryDate: '2024-05-30', status: 'Low Stock', statusBg: 'bg-error-container text-on-error-container', icon: 'medication' },
-    { name: 'Epinephrine Pen', category: 'Emergency / Auto-injector', quantity: '25', expiryDate: '2024-03-15', status: 'Expiring', statusBg: 'bg-tertiary-container text-on-tertiary-container', icon: 'vaccines' },
-    { name: 'Ibuprofen 200mg', category: 'NSAID / Tablets', quantity: '1200', expiryDate: '2026-12-05', status: 'OK Status', statusBg: 'bg-tertiary-container text-on-tertiary-container', icon: 'medical_information' },
-];
+const getMedicineStatus = (m) => {
+    if (!m.expiration_date && m.stock_quantity <= 20)
+        return { label: 'Low Stock', cls: 'bg-error-container text-on-error-container' };
+    if (m.stock_quantity <= 20)
+        return { label: 'Low Stock', cls: 'bg-error-container text-on-error-container' };
+    if (m.expiration_date) {
+        const days = (new Date(m.expiration_date) - new Date()) / (1000 * 60 * 60 * 24);
+        if (days <= 30) return { label: 'Expiring', cls: 'bg-tertiary-container text-on-tertiary-container' };
+    }
+    return { label: 'OK Status', cls: 'bg-tertiary-container text-on-tertiary-container' };
+};
+
+const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
 const Medicines = () => {
+    const [medicines, setMedicines] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [addOpen, setAddOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [selected, setSelected] = useState(null);
+    const [page, setPage] = useState(1);
+    const [search, setSearch] = useState('');
+
+    const fetchMedicines = async () => {
+        setLoading(true);
+        try {
+            const res = await axios.get(`${config.uniClinicAPI}${endpoints.medicines}`);
+            setMedicines(res.data);
+        } catch {
+            setError('Failed to load medicines.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchMedicines(); }, []);
+    useEffect(() => { setPage(1); }, [search]);
+
+    const handleAdd = async (form) => {
+        try {
+            await axios.post(`${config.uniClinicAPI}${endpoints.medicines}`, form);
+            fetchMedicines();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to add medicine.');
+        }
+    };
+
+    const handleEdit = async (form) => {
+        try {
+            await axios.put(`${config.uniClinicAPI}${endpoints.medicines}/${selected.medicine_id}`, form);
+            fetchMedicines();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to update medicine.');
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await axios.delete(`${config.uniClinicAPI}${endpoints.medicines}/${selected.medicine_id}`);
+            setDeleteOpen(false);
+            fetchMedicines();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to delete medicine.');
+        }
+    };
 
     const openEdit = (m) => { setSelected(m); setEditOpen(true); };
     const openDelete = (m) => { setSelected(m); setDeleteOpen(true); };
+
+    // Real stats
+    const totalSKU = medicines.length;
+    const lowStockCount = medicines.filter(m => m.stock_quantity <= 20).length;
+    const expiringSoonCount = medicines.filter(m => {
+        if (!m.expiration_date) return false;
+        const days = (new Date(m.expiration_date) - new Date()) / (1000 * 60 * 60 * 24);
+        return days > 0 && days <= 30;
+    }).length;
+
+    const filtered = medicines.filter(m => {
+        const q = search.toLowerCase();
+        return !q || (m.name || '').toLowerCase().includes(q);
+    });
+
+    const PAGE_SIZE = 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
     return (
         <>
             <Sidebar />
@@ -47,7 +123,7 @@ const Medicines = () => {
                                 <span className="text-xs font-bold uppercase tracking-tighter text-on-surface-variant">Total SKU</span>
                             </div>
                             <div>
-                                <div className="text-4xl font-bold text-on-surface">142</div>
+                                <div className="text-4xl font-bold text-on-surface">{totalSKU}</div>
                                 <div className="text-sm text-on-surface-variant">Active medicines in stock</div>
                             </div>
                         </div>
@@ -57,7 +133,7 @@ const Medicines = () => {
                                 <span className="text-xs font-bold uppercase tracking-tighter text-on-surface-variant">Critically Low</span>
                             </div>
                             <div>
-                                <div className="text-4xl font-bold text-on-surface">08</div>
+                                <div className="text-4xl font-bold text-on-surface">{lowStockCount}</div>
                                 <div className="text-sm text-on-surface-variant">Require immediate restock</div>
                             </div>
                         </div>
@@ -67,7 +143,7 @@ const Medicines = () => {
                                 <span className="text-xs font-bold uppercase tracking-tighter text-on-surface-variant">Expiring Soon</span>
                             </div>
                             <div>
-                                <div className="text-4xl font-bold text-on-surface">12</div>
+                                <div className="text-4xl font-bold text-on-surface">{expiringSoonCount}</div>
                                 <div className="text-sm text-on-surface-variant">Within next 30 days</div>
                             </div>
                         </div>
@@ -75,9 +151,15 @@ const Medicines = () => {
 
                     <div className="bg-surface-container-lowest rounded-lg overflow-hidden shadow-sm shadow-slate-200">
                         <div className="px-8 py-6 border-b border-surface-container flex items-center justify-between bg-surface-container-lowest">
-                            <div className="flex items-center gap-4">
-                                <span className="material-symbols-outlined text-on-surface-variant">filter_list</span>
-                                <span className="text-sm font-semibold text-on-surface-variant uppercase tracking-widest">Active Inventory</span>
+                            <div className="relative w-80">
+                                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[18px]">search</span>
+                                <input
+                                    className="w-full pl-11 pr-4 py-2.5 bg-surface rounded-full border-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                                    placeholder="Search medicines..."
+                                    type="text"
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
                             </div>
                             <div className="flex items-center gap-6">
                                 <div className="flex items-center gap-2">
@@ -102,157 +184,84 @@ const Medicines = () => {
                             </thead>
                             <tbody className="divide-y divide-surface-container-low">
 
-                                <tr className="group hover:bg-surface-container-low/50 transition-colors">
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
-                                                <span className="material-symbols-outlined text-[20px]">pill</span>
+                                {loading ? (
+                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">Loading medicines...</td></tr>
+                                ) : error ? (
+                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-error">{error}</td></tr>
+                                ) : medicines.length === 0 ? (
+                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">No medicines found.</td></tr>
+                                ) : paged.length === 0 ? (
+                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">No medicines match your search.</td></tr>
+                                ) : paged.map((m) => {
+                                    const status = getMedicineStatus(m);
+                                    return (
+                                    <tr key={m.medicine_id} className="group hover:bg-surface-container-low/50 transition-colors">
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
+                                                    <span className="material-symbols-outlined text-[20px]">medication</span>
+                                                </div>
+                                                <div>
+                                                    <div className="font-bold text-on-surface">{m.name}</div>
+                                                    <div className="text-xs text-on-surface-variant">ID: {m.medicine_id}</div>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <div className="font-bold text-on-surface">Amoxicillin 500mg</div>
-                                                <div className="text-xs text-on-surface-variant">Antibiotic / Capsule</div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className="font-semibold text-on-surface">{m.stock_quantity} <span className="text-on-surface-variant text-xs font-normal">units</span></span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className="text-on-surface-variant font-medium">{formatDate(m.expiration_date)}</span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${status.cls}`}>
+                                                {status.label}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6 text-right">
+                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => openEdit(m)} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-primary transition-colors">
+                                                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                                                </button>
+                                                <button onClick={() => openDelete(m)} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-error transition-colors">
+                                                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                                                </button>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="font-semibold text-on-surface">450 <span className="text-on-surface-variant text-xs font-normal">units</span></span>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="text-on-surface-variant font-medium">Oct 12, 2025</span>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-tertiary-container text-on-tertiary-container">
-                                            OK Status
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-6 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => openEdit(MEDICINES[0])} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-primary transition-colors">
-                                                <span className="material-symbols-outlined text-[18px]">edit</span>
-                                            </button>
-                                            <button onClick={() => openDelete(MEDICINES[0])} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-error transition-colors">
-                                                <span className="material-symbols-outlined text-[18px]">delete</span>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <tr className="group hover:bg-surface-container-low/50 transition-colors">
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
-                                                <span className="material-symbols-outlined text-[20px]">medication</span>
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-on-surface">Paracetamol Syrup</div>
-                                                <div className="text-xs text-on-surface-variant">Analgesic / 100ml Bottle</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="font-semibold text-on-surface text-error">12 <span className="text-on-surface-variant text-xs font-normal">units</span></span>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="text-on-surface-variant font-medium">May 30, 2024</span>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-error-container text-on-error-container">
-                                            Low Stock
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-6 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => openEdit(MEDICINES[1])} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-primary transition-colors">
-                                                <span className="material-symbols-outlined text-[18px]">edit</span>
-                                            </button>
-                                            <button onClick={() => openDelete(MEDICINES[1])} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-error transition-colors">
-                                                <span className="material-symbols-outlined text-[18px]">delete</span>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <tr className="group hover:bg-surface-container-low/50 transition-colors">
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
-                                                <span className="material-symbols-outlined text-[20px]">vaccines</span>
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-on-surface">Epinephrine Pen</div>
-                                                <div className="text-xs text-on-surface-variant">Emergency / Auto-injector</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="font-semibold text-on-surface">25 <span className="text-on-surface-variant text-xs font-normal">units</span></span>
-                                    </td>
-                                    <td className="px-8 py-6 text-error">
-                                        <span className="font-bold">Mar 15, 2024</span>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-tertiary-container text-on-tertiary-container">
-                                            Expiring
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-6 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => openEdit(MEDICINES[2])} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-primary transition-colors">
-                                                <span className="material-symbols-outlined text-[18px]">edit</span>
-                                            </button>
-                                            <button onClick={() => openDelete(MEDICINES[2])} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-error transition-colors">
-                                                <span className="material-symbols-outlined text-[18px]">delete</span>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <tr className="group hover:bg-surface-container-low/50 transition-colors">
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
-                                                <span className="material-symbols-outlined text-[20px]">medical_information</span>
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-on-surface">Ibuprofen 200mg</div>
-                                                <div className="text-xs text-on-surface-variant">NSAID / Tablets</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="font-semibold text-on-surface">1200 <span className="text-on-surface-variant text-xs font-normal">units</span></span>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="text-on-surface-variant font-medium">Dec 05, 2026</span>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-tertiary-container text-on-tertiary-container">
-                                            OK Status
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-6 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => openEdit(MEDICINES[3])} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-primary transition-colors">
-                                                <span className="material-symbols-outlined text-[18px]">edit</span>
-                                            </button>
-                                            <button onClick={() => openDelete(MEDICINES[3])} className="p-2 hover:bg-white rounded-full text-on-surface-variant hover:text-error transition-colors">
-                                                <span className="material-symbols-outlined text-[18px]">delete</span>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
+                                        </td>
+                                    </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                         <div className="px-8 py-6 flex items-center justify-between text-sm text-on-surface-variant">
-                            <p>Showing 4 of 142 products</p>
+                            <p>{filtered.length === 0 ? 'No medicines found' :
+                                `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} of ${filtered.length} medicine${filtered.length !== 1 ? 's' : ''}${search ? ' (filtered)' : ''}`}</p>
                             <div className="flex items-center gap-2">
-                                <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-all">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
                                     <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                                 </button>
-                                <button className="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-on-primary font-bold">1</button>
-                                <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-all">2</button>
-                                <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-all">3</button>
-                                <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-all">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(n => totalPages <= 5 || Math.abs(n - page) <= 1 || n === 1 || n === totalPages)
+                                    .map((n, idx, arr) => (
+                                        <React.Fragment key={n}>
+                                            {idx > 0 && arr[idx - 1] !== n - 1 && (
+                                                <span className="w-8 h-8 flex items-center justify-center text-xs">…</span>
+                                            )}
+                                            <button
+                                                onClick={() => setPage(n)}
+                                                className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-xs transition-all ${page === n ? 'bg-primary text-on-primary' : 'hover:bg-surface-container'}`}
+                                            >{n}</button>
+                                        </React.Fragment>
+                                    ))}
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
                                     <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                                 </button>
                             </div>
@@ -296,12 +305,12 @@ const Medicines = () => {
             </main>
 
             {/* Modals */}
-            <AddEditMedicineModal open={addOpen} onClose={() => setAddOpen(false)} />
-            <AddEditMedicineModal open={editOpen} onClose={() => setEditOpen(false)} medicine={selected} />
+            <AddEditMedicineModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={handleAdd} />
+            <AddEditMedicineModal open={editOpen} onClose={() => setEditOpen(false)} medicine={selected} onSubmit={handleEdit} />
             <ConfirmDeleteModal
                 open={deleteOpen}
                 onClose={() => setDeleteOpen(false)}
-                onConfirm={() => { alert(`Deleted: ${selected?.name}`); setDeleteOpen(false); }}
+                onConfirm={handleDelete}
                 itemName={selected?.name}
                 itemType="medicine"
             />

@@ -9,6 +9,7 @@ const {
   findStaffByUsername,
   updateStaff,
   deleteStaff,
+  updateLastActive,
 } = require('../Model/userModel');
 
 const SALT_ROUNDS = Number.isFinite(SALT) ? SALT : 10;
@@ -28,13 +29,14 @@ const UserController = {
       if (!staff) {
         return response.status(401).json({ message: 'Invalid credentials' });
       }
-      
-      const match = password === staff.password;
 
-      // const match = await bcrypt.compare(password, staff.password);
-      // if (!match) {
-      //   return response.status(401).json({ message: 'Invalid credentials' });
-      // }
+      const match = await bcrypt.compare(password, staff.password);
+      if (!match) {
+        return response.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Record the login timestamp
+      await updateLastActive(staff.staff_id);
 
       const token = jwt.sign(
         { id: staff.staff_id, name: staff.name, role: staff.role },

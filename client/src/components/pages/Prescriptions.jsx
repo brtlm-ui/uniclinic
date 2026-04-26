@@ -1,23 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
+import { ConfirmDeleteModal } from '../modals/SharedModals';
+import { config, endpoints } from '../config/config';
 
-const PRESCRIPTIONS = [
-    { id: '#RX-8821', visitId: 'VST-4492', medicine: 'Amoxicillin 500mg', quantity: '15 Units', icon: 'medication', iconBg: 'bg-tertiary-container', iconFg: 'text-on-tertiary-container' },
-    { id: '#RX-8822', visitId: 'VST-4495', medicine: 'Paracetamol', quantity: '10 Units', icon: 'pill', iconBg: 'bg-primary-container', iconFg: 'text-on-primary-container' },
-    { id: '#RX-8825', visitId: 'VST-4501', medicine: 'Ibuprofen 200mg', quantity: '20 Units', icon: 'medical_services', iconBg: 'bg-tertiary-container', iconFg: 'text-on-tertiary-container' },
-    { id: '#RX-8830', visitId: 'VST-4512', medicine: 'Cetirizine', quantity: '5 Units', icon: 'medication', iconBg: 'bg-primary-container', iconFg: 'text-on-primary-container' },
-];
-
-const PrescriptionModal = ({ open, onClose, prescription = null }) => {
+/* ── Inline Prescription Modal (API-connected) ── */
+const PrescriptionModal = ({ open, onClose, prescription = null, medicines = [], onSubmit }) => {
     const isEdit = !!prescription;
-    const [form, setForm] = useState({ visitId: '', medicine: '', quantity: '', notes: '' });
+    const [form, setForm] = useState({ visit_id: '', medicine_id: '', quantity: '' });
 
     useEffect(() => {
         if (prescription) {
-            setForm({ visitId: prescription.visitId || '', medicine: prescription.medicine || '', quantity: prescription.quantity?.replace(' Units', '') || '', notes: '' });
+            setForm({ visit_id: prescription.visit_id ?? '', medicine_id: prescription.medicine_id ?? '', quantity: prescription.quantity ?? '' });
         } else {
-            setForm({ visitId: '', medicine: '', quantity: '', notes: '' });
+            setForm({ visit_id: '', medicine_id: '', quantity: '' });
         }
     }, [prescription, open]);
 
@@ -31,7 +28,7 @@ const PrescriptionModal = ({ open, onClose, prescription = null }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        alert(`${isEdit ? 'Updated' : 'Created'} prescription for: ${form.medicine}`);
+        onSubmit?.(form);
         onClose();
     };
 
@@ -44,8 +41,6 @@ const PrescriptionModal = ({ open, onClose, prescription = null }) => {
                 onClick={e => e.stopPropagation()}
             >
                 <style>{`@keyframes modalIn { from { opacity:0; transform:scale(0.95) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }`}</style>
-
-                {/* Header */}
                 <div className="px-8 pt-8 pb-6 border-b border-surface-container flex items-start gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-primary-container/20 flex items-center justify-center flex-shrink-0">
                         <span className="material-symbols-outlined text-primary">prescriptions</span>
@@ -58,43 +53,29 @@ const PrescriptionModal = ({ open, onClose, prescription = null }) => {
                         <span className="material-symbols-outlined text-[18px]">close</span>
                     </button>
                 </div>
-
                 <form onSubmit={handleSubmit}>
                     <div className="p-8 space-y-5">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Visit ID</label>
-                                <input className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" value={form.visitId} onChange={e => setForm({ ...form, visitId: e.target.value })} placeholder="e.g. VST-4492" required />
+                                <input type="number" min="1" className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" value={form.visit_id} onChange={e => setForm(f => ({ ...f, visit_id: e.target.value }))} placeholder="e.g. 1" required />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Quantity (units)</label>
-                                <input type="number" className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="e.g. 15" required />
+                                <input type="number" min="1" className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} placeholder="e.g. 15" required />
                             </div>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Medicine</label>
-                            <select className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" value={form.medicine} onChange={e => setForm({ ...form, medicine: e.target.value })} required>
+                            <select className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" value={form.medicine_id} onChange={e => setForm(f => ({ ...f, medicine_id: e.target.value }))} required>
                                 <option value="">Select medicine</option>
-                                <option>Amoxicillin 500mg</option>
-                                <option>Paracetamol</option>
-                                <option>Ibuprofen 200mg</option>
-                                <option>Cetirizine</option>
-                                <option>Epinephrine Pen</option>
-                                <option>Vitamin C 500mg</option>
+                                {medicines.map(m => <option key={m.medicine_id} value={m.medicine_id}>{m.name}</option>)}
                             </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Notes / Instructions</label>
-                            <textarea className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20 resize-none" rows={3} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="e.g. Take with food, twice daily..." />
                         </div>
                     </div>
                     <div className="px-8 pb-8 flex gap-3">
-                        <button type="button" onClick={onClose} className="flex-1 py-3 rounded-full border border-outline-variant/30 text-on-surface-variant font-bold text-sm hover:bg-surface-container transition-all">
-                            Cancel
-                        </button>
-                        <button type="submit" className="flex-1 py-3 rounded-full bg-primary text-on-primary font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary-dim transition-all active:scale-95">
-                            {isEdit ? 'Save Changes' : 'Create Prescription'}
-                        </button>
+                        <button type="button" onClick={onClose} className="flex-1 py-3 rounded-full border border-outline-variant/30 text-on-surface-variant font-bold text-sm hover:bg-surface-container transition-all">Cancel</button>
+                        <button type="submit" className="flex-1 py-3 rounded-full bg-primary text-on-primary font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-all">{isEdit ? 'Save Changes' : 'Create Prescription'}</button>
                     </div>
                 </form>
             </div>
@@ -103,11 +84,69 @@ const PrescriptionModal = ({ open, onClose, prescription = null }) => {
 };
 
 const Prescriptions = () => {
+    const [prescriptions, setPrescriptions] = useState([]);
+    const [medicines, setMedicines] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [modalOpen, setModalOpen] = useState(false);
     const [editingRx, setEditingRx] = useState(null);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [selected, setSelected] = useState(null);
+    const [page, setPage] = useState(1);
+
+    const fetchAll = async () => {
+        setLoading(true);
+        try {
+            const [pRes, mRes] = await Promise.all([
+                axios.get(`${config.uniClinicAPI}${endpoints.prescriptions}`),
+                axios.get(`${config.uniClinicAPI}${endpoints.medicines}`),
+            ]);
+            setPrescriptions(pRes.data);
+            setMedicines(mRes.data);
+        } catch {
+            setError('Failed to load prescriptions.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchAll(); }, []);
+
+    const handleCreate = async (form) => {
+        try {
+            await axios.post(`${config.uniClinicAPI}${endpoints.prescriptions}`, form);
+            fetchAll();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to create prescription.');
+        }
+    };
+
+    const handleEdit = async (form) => {
+        try {
+            await axios.put(`${config.uniClinicAPI}${endpoints.prescriptions}/${editingRx.prescription_id}`, form);
+            fetchAll();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to update prescription.');
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await axios.delete(`${config.uniClinicAPI}${endpoints.prescriptions}/${selected.prescription_id}`);
+            setDeleteOpen(false);
+            fetchAll();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to delete prescription.');
+        }
+    };
 
     const openCreate = () => { setEditingRx(null); setModalOpen(true); };
     const openEdit = (rx) => { setEditingRx(rx); setModalOpen(true); };
+    const openDelete = (rx) => { setSelected(rx); setDeleteOpen(true); };
+
+    const PAGE_SIZE = 10;
+    const totalPages = Math.max(1, Math.ceil(prescriptions.length / PAGE_SIZE));
+    const paged = prescriptions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     return (
         <>
@@ -147,122 +186,75 @@ const Prescriptions = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-surface-container">
-
-                                    <tr className="hover:bg-surface-container-low transition-colors group">
-                                        <td className="py-6 px-8">
-                                            <span className="font-bold text-primary">#RX-8821</span>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <span className="text-sm font-medium text-on-surface">VST-4492</span>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-tertiary-container flex items-center justify-center">
-                                                    <span className="material-symbols-outlined text-on-tertiary-container text-sm">medication</span>
+                                    {loading ? (
+                                        <tr><td colSpan={5} className="py-12 text-center text-on-surface-variant">Loading...</td></tr>
+                                    ) : error ? (
+                                        <tr><td colSpan={5} className="py-12 text-center text-error">{error}</td></tr>
+                                    ) : prescriptions.length === 0 ? (
+                                        <tr><td colSpan={5} className="py-12 text-center text-on-surface-variant">No prescriptions found.</td></tr>
+                                    ) : paged.map((rx) => (
+                                        <tr key={rx.prescription_id} className="hover:bg-surface-container-low transition-colors group">
+                                            <td className="py-6 px-8">
+                                                <span className="font-bold text-primary">#{String(rx.prescription_id).padStart(4, '0')}</span>
+                                            </td>
+                                            <td className="py-6 px-8">
+                                                <span className="text-sm font-medium text-on-surface">{rx.visit_id}</span>
+                                            </td>
+                                            <td className="py-6 px-8">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-tertiary-container flex items-center justify-center">
+                                                        <span className="material-symbols-outlined text-on-tertiary-container text-sm">medication</span>
+                                                    </div>
+                                                    <span className="font-semibold text-on-surface">{rx.medicine_name}</span>
                                                 </div>
-                                                <span className="font-semibold text-on-surface">Amoxicillin 500mg</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <span className="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold">15 Units</span>
-                                        </td>
-                                        <td className="py-6 px-8 text-right">
-                                            <button onClick={() => openEdit(PRESCRIPTIONS[0])} className="p-2 rounded-full text-on-surface-variant hover:bg-white hover:text-primary transition-all opacity-0 group-hover:opacity-100">
-                                                <span className="material-symbols-outlined">edit</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-
-                                    <tr className="hover:bg-surface-container-low transition-colors group">
-                                        <td className="py-6 px-8">
-                                            <span className="font-bold text-primary">#RX-8822</span>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <span className="text-sm font-medium text-on-surface">VST-4495</span>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center">
-                                                    <span className="material-symbols-outlined text-on-primary-container text-sm">pill</span>
-                                                </div>
-                                                <span className="font-semibold text-on-surface">Paracetamol</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <span className="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold">10 Units</span>
-                                        </td>
-                                        <td className="py-6 px-8 text-right">
-                                            <button onClick={() => openEdit(PRESCRIPTIONS[1])} className="p-2 rounded-full text-on-surface-variant hover:bg-white hover:text-primary transition-all opacity-0 group-hover:opacity-100">
-                                                <span className="material-symbols-outlined">edit</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-
-                                    <tr className="hover:bg-surface-container-low transition-colors group">
-                                        <td className="py-6 px-8">
-                                            <span className="font-bold text-primary">#RX-8825</span>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <span className="text-sm font-medium text-on-surface">VST-4501</span>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-tertiary-container flex items-center justify-center">
-                                                    <span className="material-symbols-outlined text-on-tertiary-container text-sm">medical_services</span>
-                                                </div>
-                                                <span className="font-semibold text-on-surface">Ibuprofen 200mg</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <span className="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold">20 Units</span>
-                                        </td>
-                                        <td className="py-6 px-8 text-right">
-                                            <button onClick={() => openEdit(PRESCRIPTIONS[2])} className="p-2 rounded-full text-on-surface-variant hover:bg-white hover:text-primary transition-all opacity-0 group-hover:opacity-100">
-                                                <span className="material-symbols-outlined">edit</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-
-                                    <tr className="hover:bg-surface-container-low transition-colors group">
-                                        <td className="py-6 px-8">
-                                            <span className="font-bold text-primary">#RX-8830</span>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <span className="text-sm font-medium text-on-surface">VST-4512</span>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center">
-                                                    <span className="material-symbols-outlined text-on-primary-container text-sm">medication</span>
-                                                </div>
-                                                <span className="font-semibold text-on-surface">Cetirizine</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-6 px-8">
-                                            <span className="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold">5 Units</span>
-                                        </td>
-                                        <td className="py-6 px-8 text-right">
-                                            <button onClick={() => openEdit(PRESCRIPTIONS[3])} className="p-2 rounded-full text-on-surface-variant hover:bg-white hover:text-primary transition-all opacity-0 group-hover:opacity-100">
-                                                <span className="material-symbols-outlined">edit</span>
-                                            </button>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                            <td className="py-6 px-8">
+                                                <span className="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold">{rx.quantity} Units</span>
+                                            </td>
+                                            <td className="py-6 px-8 text-right">
+                                                <button onClick={() => openEdit(rx)} className="p-2 rounded-full text-on-surface-variant hover:bg-white hover:text-primary transition-all opacity-0 group-hover:opacity-100">
+                                                    <span className="material-symbols-outlined">edit</span>
+                                                </button>
+                                                <button onClick={() => openDelete(rx)} className="p-2 rounded-full text-on-surface-variant hover:bg-white hover:text-error transition-all opacity-0 group-hover:opacity-100">
+                                                    <span className="material-symbols-outlined">delete</span>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
                         <div className="p-8 bg-surface-container-low flex justify-between items-center">
-                            <p className="text-sm font-body text-on-surface-variant">Showing 4 of 124 prescriptions</p>
+                            <p className="text-sm font-body text-on-surface-variant">
+                                {prescriptions.length === 0 ? 'No prescriptions found' :
+                                    `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, prescriptions.length)} of ${prescriptions.length} prescription${prescriptions.length !== 1 ? 's' : ''}`}
+                            </p>
                             <div className="flex gap-2">
-                                <button className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-sm text-on-surface hover:text-primary transition-all">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-sm text-on-surface hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
                                     <span className="material-symbols-outlined">chevron_left</span>
                                 </button>
-                                <button className="h-10 w-10 flex items-center justify-center rounded-full bg-primary text-on-primary shadow-lg shadow-primary/20">
-                                    1
-                                </button>
-                                <button className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-sm text-on-surface hover:text-primary transition-all">
-                                    2
-                                </button>
-                                <button className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-sm text-on-surface hover:text-primary transition-all">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(n => totalPages <= 5 || Math.abs(n - page) <= 1 || n === 1 || n === totalPages)
+                                    .map((n, idx, arr) => (
+                                        <React.Fragment key={n}>
+                                            {idx > 0 && arr[idx - 1] !== n - 1 && (
+                                                <span className="h-10 w-10 flex items-center justify-center text-on-surface-variant text-xs">…</span>
+                                            )}
+                                            <button
+                                                onClick={() => setPage(n)}
+                                                className={`h-10 w-10 flex items-center justify-center rounded-full font-bold text-sm shadow-sm transition-all ${page === n ? 'bg-primary text-on-primary shadow-lg shadow-primary/20' : 'bg-white text-on-surface hover:text-primary'}`}
+                                            >{n}</button>
+                                        </React.Fragment>
+                                    ))}
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-sm text-on-surface hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
                                     <span className="material-symbols-outlined">chevron_right</span>
                                 </button>
                             </div>
@@ -305,6 +297,14 @@ const Prescriptions = () => {
                 open={modalOpen}
                 onClose={() => setModalOpen(false)}
                 prescription={editingRx}
+                medicines={medicines}
+                onSubmit={editingRx ? handleEdit : handleCreate}
+            />
+            <ConfirmDeleteModal
+                open={deleteOpen}
+                onClose={() => setDeleteOpen(false)}
+                onConfirm={handleDelete}
+                itemName={selected ? `Prescription #${String(selected.prescription_id).padStart(4, '0')}` : ''}
             />
         </>
     );

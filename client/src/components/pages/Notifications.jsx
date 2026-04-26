@@ -1,97 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
-
-const notificationData = [
-    {
-        id: 1,
-        type: 'urgent',
-        icon: 'emergency',
-        title: 'Urgent: Anaphylaxis Protocol Initiated',
-        description: 'Student Liam Carter (Grade 4) required epinephrine administration. Emergency services notified at 10:42 AM.',
-        time: '10:42 AM',
-        date: 'Today',
-        unread: true,
-    },
-    {
-        id: 2,
-        type: 'warning',
-        icon: 'inventory_2',
-        title: 'Low Stock: Saline Solution',
-        description: 'Current inventory for 0.9% Saline 500ml has fallen below threshold (4 units remaining).',
-        time: '09:15 AM',
-        date: 'Today',
-        unread: true,
-    },
-    {
-        id: 3,
-        type: 'info',
-        icon: 'system_update',
-        title: 'System Update Completed',
-        description: 'The Patient Data Relay module has been updated to v2.4.1. Encryption protocols verified.',
-        time: '08:00 AM',
-        date: 'Today',
-        unread: false,
-    },
-    {
-        id: 4,
-        type: 'success',
-        icon: 'event_available',
-        title: 'Visit Logged: Routine Screening',
-        description: 'Student Maya Singh (Grade 10) completed annual vision screening. All metrics normal.',
-        time: '03:30 PM',
-        date: 'Yesterday',
-        unread: false,
-    },
-    {
-        id: 5,
-        type: 'warning',
-        icon: 'assignment_late',
-        title: 'Overdue Medical Form',
-        description: 'The immunization record for Ethan Hunt is still missing after 3 follow-ups. Administrative action suggested.',
-        time: '02:00 PM',
-        date: 'Yesterday',
-        unread: false,
-    },
-    {
-        id: 6,
-        type: 'info',
-        icon: 'science',
-        title: 'Lab Results Available',
-        description: 'Bloodwork results for Student ID #9921 have been securely uploaded to the portal.',
-        time: '11:30 AM',
-        date: 'Yesterday',
-        unread: false,
-    },
-    {
-        id: 7,
-        type: 'success',
-        icon: 'medication',
-        title: 'Prescription Dispensed',
-        description: 'Cetirizine 10mg dispensed to Student Amara Rodriguez (2022-12903) by Nurse Sarah.',
-        time: '10:00 AM',
-        date: 'Apr 19, 2026',
-        unread: false,
-    },
-];
+import { config, endpoints } from '../config/config';
 
 const typeConfig = {
-    urgent: { bg: 'bg-error-container/20', iconColor: 'text-error', iconBg: 'bg-error-container', dot: 'bg-error' },
-    warning: { bg: 'bg-tertiary-container/20', iconColor: 'text-tertiary', iconBg: 'bg-tertiary-container', dot: 'bg-tertiary' },
-    info: { bg: 'bg-secondary-container/20', iconColor: 'text-secondary', iconBg: 'bg-secondary-container', dot: 'bg-secondary' },
-    success: { bg: 'bg-primary-container/20', iconColor: 'text-primary', iconBg: 'bg-primary-container', dot: 'bg-primary' },
+    urgent:  { bg: 'bg-error-container/20',     iconColor: 'text-error',     iconBg: 'bg-error-container',     dot: 'bg-error' },
+    warning: { bg: 'bg-tertiary-container/20',  iconColor: 'text-tertiary',  iconBg: 'bg-tertiary-container',  dot: 'bg-tertiary' },
+    info:    { bg: 'bg-secondary-container/20', iconColor: 'text-secondary', iconBg: 'bg-secondary-container', dot: 'bg-secondary' },
+    success: { bg: 'bg-primary-container/20',   iconColor: 'text-primary',   iconBg: 'bg-primary-container',   dot: 'bg-primary' },
 };
 
+const fmtGroup = (iso) => {
+    const d = new Date(iso);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    if (d >= today) return 'Today';
+    if (d >= yesterday) return 'Yesterday';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const fmtTime = (iso) =>
+    new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
 const Notifications = () => {
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
 
-    const grouped = notificationData.reduce((acc, n) => {
-        if (!acc[n.date]) acc[n.date] = [];
-        acc[n.date].push(n);
+    const fetchNotifications = useCallback(async () => {
+        try {
+            const res = await axios.get(`${config.uniClinicAPI}${endpoints.notifications}`);
+            setNotifications(res.data);
+        } catch { /* ignore */ } finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+
+    const handleMarkRead = async (id) => {
+        try {
+            await axios.put(`${config.uniClinicAPI}${endpoints.notifications}/${id}/read`);
+            setNotifications(prev => prev.map(n => n.notification_id === id ? { ...n, is_read: 1 } : n));
+        } catch { /* ignore */ }
+    };
+
+    const handleMarkAllRead = async () => {
+        try {
+            await axios.put(`${config.uniClinicAPI}${endpoints.notifications}/read-all`);
+            setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+        } catch { /* ignore */ }
+    };
+
+    const handleDismiss = async (id) => {
+        try {
+            await axios.delete(`${config.uniClinicAPI}${endpoints.notifications}/${id}`);
+            setNotifications(prev => prev.filter(n => n.notification_id !== id));
+        } catch { /* ignore */ }
+    };
+
+    const filtered = filter === 'all' ? notifications : notifications.filter(n => n.type === filter);
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+
+    const grouped = filtered.reduce((acc, n) => {
+        const label = fmtGroup(n.created_at);
+        if (!acc[label]) acc[label] = [];
+        acc[label].push(n);
         return acc;
     }, {});
-
-    const unreadCount = notificationData.filter(n => n.unread).length;
 
     return (
         <>
@@ -115,7 +90,10 @@ const Notifications = () => {
                                     <span className="font-bold text-sm">{unreadCount} unread</span>
                                 </div>
                             )}
-                            <button className="bg-surface-container-lowest text-on-surface-variant px-5 py-2.5 rounded-full text-sm font-semibold hover:bg-white transition-all shadow-sm">
+                            <button
+                                onClick={handleMarkAllRead}
+                                className="bg-surface-container-lowest text-on-surface-variant px-5 py-2.5 rounded-full text-sm font-semibold hover:bg-white transition-all shadow-sm"
+                            >
                                 Mark all as read
                             </button>
                         </div>
@@ -143,52 +121,67 @@ const Notifications = () => {
 
                 {/* Notification list */}
                 <section className="px-8 space-y-10">
-                    {Object.entries(grouped).map(([date, items]) => {
-                        const filtered = filter === 'all' ? items : items.filter(n => n.type === filter);
-                        if (filtered.length === 0) return null;
-                        return (
-                            <div key={date}>
-                                <div className="flex items-center gap-4 mb-6">
-                                    <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">{date}</span>
-                                    <div className="flex-1 h-px bg-surface-container-high"></div>
-                                </div>
-                                <div className="space-y-3">
-                                    {filtered.map(notification => {
-                                        const cfg = typeConfig[notification.type];
-                                        return (
-                                            <div
-                                                key={notification.id}
-                                                className={`flex items-start gap-5 p-6 rounded-2xl transition-all group cursor-pointer hover:shadow-md ${
-                                                    notification.unread ? 'bg-surface-container-lowest shadow-sm border border-outline-variant/10' : 'bg-surface-container-lowest/60'
-                                                }`}
-                                            >
-                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${cfg.iconBg}`}>
-                                                    <span className={`material-symbols-outlined ${cfg.iconColor}`} data-icon={notification.icon}>{notification.icon}</span>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-start justify-between gap-4">
-                                                        <div>
-                                                            <div className="flex items-center gap-3 mb-1">
-                                                                {notification.unread && (
-                                                                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`}></span>
-                                                                )}
-                                                                <p className="font-bold text-on-surface">{notification.title}</p>
-                                                            </div>
-                                                            <p className="text-sm text-on-surface-variant leading-relaxed">{notification.description}</p>
-                                                        </div>
-                                                        <span className="text-xs font-medium text-on-surface-variant flex-shrink-0 mt-0.5">{notification.time}</span>
-                                                    </div>
-                                                </div>
-                                                <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-surface-container text-on-surface-variant">
-                                                    <span className="material-symbols-outlined text-[18px]">close</span>
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                    {loading && (
+                        <p className="text-center text-on-surface-variant py-16">Loading notifications...</p>
+                    )}
+                    {!loading && filtered.length === 0 && (
+                        <div className="text-center py-16">
+                            <span className="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-4 block">notifications_off</span>
+                            <p className="text-on-surface-variant font-medium">
+                                {filter === 'all' ? 'No notifications yet.' : `No ${filter} notifications.`}
+                            </p>
+                        </div>
+                    )}
+                    {!loading && Object.entries(grouped).map(([date, items]) => (
+                        <div key={date}>
+                            <div className="flex items-center gap-4 mb-6">
+                                <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">{date}</span>
+                                <div className="flex-1 h-px bg-surface-container-high"></div>
                             </div>
-                        );
-                    })}
+                            <div className="space-y-3">
+                                {items.map(n => {
+                                    const cfg = typeConfig[n.type] || typeConfig.info;
+                                    return (
+                                        <div
+                                            key={n.notification_id}
+                                            onClick={() => !n.is_read && handleMarkRead(n.notification_id)}
+                                            className={`flex items-start gap-5 p-6 rounded-2xl transition-all group cursor-pointer hover:shadow-md ${
+                                                !n.is_read
+                                                    ? `${cfg.bg} shadow-sm border border-outline-variant/10`
+                                                    : 'bg-surface-container-lowest/60'
+                                            }`}
+                                        >
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${cfg.iconBg}`}>
+                                                <span className={`material-symbols-outlined ${cfg.iconColor}`}>{n.icon}</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div>
+                                                        <div className="flex items-center gap-3 mb-1">
+                                                            {!n.is_read && (
+                                                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`}></span>
+                                                            )}
+                                                            <p className="font-bold text-on-surface">{n.title}</p>
+                                                        </div>
+                                                        <p className="text-sm text-on-surface-variant leading-relaxed">{n.description}</p>
+                                                    </div>
+                                                    <span className="text-xs font-medium text-on-surface-variant flex-shrink-0 mt-0.5">
+                                                        {fmtTime(n.created_at)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); handleDismiss(n.notification_id); }}
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-surface-container text-on-surface-variant flex-shrink-0"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]">close</span>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
                 </section>
             </main>
         </>

@@ -1,25 +1,120 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
 import { useNavigate } from 'react-router-dom';
 import { AddEditVisitModal, ConfirmDeleteModal } from '../modals/SharedModals';
+import { config, endpoints } from '../config/config';
 
-const VISITS = [
-    { student: 'Ethan Sterling', grade: 'Grade 10-B', date: 'Oct 24, 2023', time: '10:15 AM', reason: 'Recurring Migraine', diagnosis: 'Mild Dehydration', status: 'Completed', statusBg: 'bg-tertiary-container', statusFg: 'text-on-tertiary-container', staff: 'Nurse Miller', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD0YFe7iuSARwAc7YWn-aMWDCmD_ZZI91t2FtG1buYx07J1Xp2lGe2Qa_Eq3ZMSe-5kymum-Zh2RBJooaX9VCIDL68p0k8a3Ez4Lc4Bhq0O1cOMea-WC1-m6kNUabVZuStPKm0UZs85KmPgVNWP3s6Kf2GQtToD8OHaTR-HhjOLpMrmwpQA2JC9bT6BVBqPDEvfAWO0PvGWuUbLXeB0fO_rs2VQKKpmyTl1h9Ig7_9oiKJ70lQtqmPKhLHh29iY0PF9yeF5RlR1o6Y' },
-    { student: 'Sienna Rossi', grade: 'Grade 08-A', date: 'Oct 24, 2023', time: '11:45 AM', reason: 'Asthma Flare-up', diagnosis: 'Exercise Induced', status: 'Emergency', statusBg: 'bg-error-container', statusFg: 'text-on-error-container', staff: 'Dr. Chen', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCKaq7Q5uzkkVFTnWPs9QoJo4IU__kAyRfyvxzR-AuAiSdIicoT2H2WgucbFy6FyDPKVY6Tp7dyAeIY-kJq8LX1td43i16LqMS1SJ51rpZVc2BFiziFbfsrIjuGciVX1KCCiT0rd3jZU139GCq6UC7mJ8qcvB2BPl0CNvh-ayzds7qaJs-vakImE-gHcoYvEflqB3amYJma60UhtzJ-XxPERu42gQnyqPmqYCHdSLIjRElxrSYQKTDCWifWHo6C_gHc8W0TqDegNfs' },
-    { student: 'Marcus Thorne', grade: 'Grade 12-C', date: 'Oct 24, 2023', time: '01:30 PM', reason: 'Ankle Sprain', diagnosis: 'Sports Injury (PE)', status: 'In Progress', statusBg: 'bg-primary-container', statusFg: 'text-on-primary-container', staff: 'Nurse Miller', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCw3VW01ATo_o50_oP4A3LdUbkyni0TGNa1Bfi-8dptUxFf5q_ng9o2s2xZAauZKtMKxcoezh-cNCtEXxNSDK-9nK3RZ38VK2FeoXY9Cimg57a2chcSphgEXYBbn7tBVPRfUwVDbaCbEZXcZJgyu3poAzkaYKq2_gxNLfjGJe7F7VO3PKxQSYVCq2UyKp7owrwEze3LzjvyzWcryGoOpoOPzlN2GeE1V-MkdqTPdHpW6iJdVqT7mGefEAkrnNv2VDuJDcE7V_n8WnM' },
-    { student: 'Elena Vance', grade: 'Grade 09-B', date: 'Oct 23, 2023', time: '02:15 PM', reason: 'Allergic Reaction', diagnosis: 'Nut Sensitivity', status: 'Referred', statusBg: 'bg-secondary-container', statusFg: 'text-on-secondary-container', staff: 'Dr. Chen', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB1tjVO1PTQB6p8I3PpE9UJ377Tme0Ahf8iMutO7Sd0Uw5nOcdTDIYH-MXA7x0VU-4m3eQ8gtHAATxu5iQbCswC2e6lhP-I46ZrjoQA7sarrJPU5FSj0yiVRoNU4teIeRzMHitunJ0yVzAc_gewVcHU5t5ALy-uI5Ht369xDoCDKLXHWhEHjtj8tV0LJob8hL3aZi-BA9xIsxqbHQELTaf8UstAz94AVbnT-9LsQHJuD0I5c0i34riNW0B6l7FO9b6pmnTosedjhiA' },
-];
+const getVisitStatusStyle = (status) => {
+    if (status === 'completed') return { bg: 'bg-tertiary-container', fg: 'text-on-tertiary-container', label: 'Completed' };
+    if (status === 'ongoing') return { bg: 'bg-primary-container', fg: 'text-on-primary-container', label: 'Ongoing' };
+    return { bg: 'bg-surface-container', fg: 'text-on-surface-variant', label: status };
+};
+
+const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+const formatTime = (t) => {
+    if (!t) return '—';
+    const [h, m] = t.split(':');
+    const hr = parseInt(h);
+    return `${hr > 12 ? hr - 12 : hr || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
+};
+
+const getInitials = (name = '') => name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
 const Visits = () => {
     const navigate = useNavigate();
+    const [visits, setVisits] = useState([]);
+    const [students, setStudents] = useState([]);
+    const [staffList, setStaffList] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [addOpen, setAddOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [selected, setSelected] = useState(null);
+    const [search, setSearch] = useState('');
+    const [filterDate, setFilterDate] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
+    const [page, setPage] = useState(1);
+
+    const fetchAll = async () => {
+        setLoading(true);
+        try {
+            const [vRes, sRes, stRes] = await Promise.all([
+                axios.get(`${config.uniClinicAPI}${endpoints.visits}`),
+                axios.get(`${config.uniClinicAPI}${endpoints.students}`),
+                axios.get(`${config.uniClinicAPI}${endpoints.staff}`),
+            ]);
+            setVisits(vRes.data);
+            setStudents(sRes.data);
+            setStaffList(stRes.data);
+        } catch {
+            setError('Failed to load visits.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchAll(); }, []);
+    useEffect(() => { setPage(1); }, [search, filterDate, filterStatus]);
+
+    const handleAdd = async (form) => {
+        try {
+            await axios.post(`${config.uniClinicAPI}${endpoints.visits}`, form);
+            fetchAll();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to add visit.');
+        }
+    };
+
+    const handleEdit = async (form) => {
+        try {
+            await axios.put(`${config.uniClinicAPI}${endpoints.visits}/${selected.visit_id}`, form);
+            fetchAll();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to update visit.');
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await axios.delete(`${config.uniClinicAPI}${endpoints.visits}/${selected.visit_id}`);
+            setDeleteOpen(false);
+            fetchAll();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to delete visit.');
+        }
+    };
 
     const openEdit = (v) => { setSelected(v); setEditOpen(true); };
     const openDelete = (v) => { setSelected(v); setDeleteOpen(true); };
+
+    // Derived — filter
+    const filtered = visits.filter(v => {
+        const q = search.toLowerCase();
+        const matchSearch = !q ||
+            (v.student_name || '').toLowerCase().includes(q) ||
+            (v.reason || '').toLowerCase().includes(q);
+        const matchDate = !filterDate || (v.visit_date?.slice(0, 10) === filterDate);
+        const matchStatus = !filterStatus || v.status === filterStatus;
+        return matchSearch && matchDate && matchStatus;
+    });
+
+    // Stats computed from real data
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayCount = visits.filter(v => v.visit_date?.slice(0, 10) === todayStr).length;
+    const ongoingCount = visits.filter(v => v.status === 'ongoing').length;
+    const reasonCounts = {};
+    visits.forEach(v => { if (v.reason) { const r = v.reason.trim(); reasonCounts[r] = (reasonCounts[r] || 0) + 1; } });
+    const topReason = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1])[0];
+    const mostCommonReason = topReason ? topReason[0] : 'No data yet';
+    const mostCommonCount = topReason ? topReason[1] : 0;
+
+    const PAGE_SIZE = 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
     return (
         <>
             <Sidebar />
@@ -51,23 +146,21 @@ const Visits = () => {
                 <section className="bg-surface-container-low rounded-xl p-6 mb-12 flex flex-wrap items-center gap-6">
                     <div className="flex-1 min-w-[240px] relative">
                         <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-                        <input className="w-full bg-surface-container-lowest border-none rounded-full py-4 pl-12 pr-6 focus:ring-2 focus:ring-primary/20 transition-all text-sm" placeholder="Search by student name or reason..." type="text" />
+                        <input className="w-full bg-surface-container-lowest border-none rounded-full py-4 pl-12 pr-6 focus:ring-2 focus:ring-primary/20 transition-all text-sm" placeholder="Search by student name or reason..." type="text" value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Date</span>
-                        <input className="bg-surface-container-lowest border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-primary/20" type="date" />
+                        <input className="bg-surface-container-lowest border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-primary/20" type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Status</span>
-                        <select className="bg-surface-container-lowest border-none rounded-full py-4 pl-6 pr-10 text-sm focus:ring-2 focus:ring-primary/20 appearance-none min-w-[160px]">
-                            <option>All Visits</option>
-                            <option>Completed</option>
-                            <option>In Progress</option>
-                            <option>Referred</option>
-                            <option>Emergency</option>
+                        <select className="bg-surface-container-lowest border-none rounded-full py-4 pl-6 pr-10 text-sm focus:ring-2 focus:ring-primary/20 appearance-none min-w-[160px]" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                            <option value="">All Visits</option>
+                            <option value="ongoing">Ongoing</option>
+                            <option value="completed">Completed</option>
                         </select>
                     </div>
-                    <button className="w-12 h-12 bg-surface-container-highest rounded-full flex items-center justify-center text-on-surface-variant hover:bg-primary-container hover:text-on-primary-container transition-colors">
+                    <button onClick={() => { setSearch(''); setFilterDate(''); setFilterStatus(''); }} className="w-12 h-12 bg-surface-container-highest rounded-full flex items-center justify-center text-on-surface-variant hover:bg-primary-container hover:text-on-primary-container transition-colors">
                         <span className="material-symbols-outlined">refresh</span>
                     </button>
                 </section>
@@ -86,176 +179,93 @@ const Visits = () => {
                         </thead>
                         <tbody className="divide-y divide-surface-container">
 
-                            <tr className="hover:bg-surface-container-low transition-colors group">
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-4">
-                                        <img className="w-12 h-12 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" src={VISITS[0].img} />
-                                        <div>
-                                            <p className="font-bold text-on-surface">{VISITS[0].student}</p>
-                                            <p className="text-xs text-on-surface-variant">{VISITS[0].grade}</p>
+                            {loading ? (
+                                <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">Loading visits...</td></tr>
+                            ) : error ? (
+                                <tr><td colSpan={6} className="px-8 py-12 text-center text-error">{error}</td></tr>
+                            ) : filtered.length === 0 ? (
+                                <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">No visits match your filters.</td></tr>
+                            ) : paged.map((v) => {
+                                const st = getVisitStatusStyle(v.status);
+                                return (
+                                <tr key={v.visit_id} className="hover:bg-surface-container-low transition-colors group">
+                                    <td className="px-8 py-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-sm">
+                                                {getInitials(v.student_name)}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-on-surface">{v.student_name}</p>
+                                                <p className="text-xs text-on-surface-variant">ID: {v.student_id}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <p className="text-sm font-semibold text-on-surface">{VISITS[0].date}</p>
-                                    <p className="text-xs text-on-surface-variant">{VISITS[0].time}</p>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <p className="text-sm font-semibold text-on-surface max-w-xs truncate">{VISITS[0].reason}</p>
-                                    <p className="text-xs text-on-surface-variant italic">{VISITS[0].diagnosis}</p>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${VISITS[0].statusBg} ${VISITS[0].statusFg}`}>{VISITS[0].status}</span>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-primary-fixed-dim flex items-center justify-center text-[10px] font-bold text-on-primary-fixed">NM</div>
-                                        <span className="text-sm font-medium text-on-surface">{VISITS[0].staff}</span>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6 text-right">
-                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openEdit(VISITS[0])} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all" title="Edit">
-                                            <span className="material-symbols-outlined text-[20px]">edit</span>
-                                        </button>
-                                        <button onClick={() => openDelete(VISITS[0])} className="p-2 rounded-full hover:bg-error-container/20 text-on-surface-variant hover:text-error transition-all" title="Delete">
-                                            <span className="material-symbols-outlined text-[20px]">delete</span>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-
-                            <tr className="hover:bg-surface-container-low transition-colors group">
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-4">
-                                        <img className="w-12 h-12 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" src={VISITS[1].img} />
-                                        <div>
-                                            <p className="font-bold text-on-surface">{VISITS[1].student}</p>
-                                            <p className="text-xs text-on-surface-variant">{VISITS[1].grade}</p>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <p className="text-sm font-semibold text-on-surface">{formatDate(v.visit_date)}</p>
+                                        <p className="text-xs text-on-surface-variant">{formatTime(v.visit_time)}</p>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <p className="text-sm font-semibold text-on-surface max-w-xs truncate">{v.reason}</p>
+                                        <p className="text-xs text-on-surface-variant italic">{v.diagnosis}</p>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${st.bg} ${st.fg}`}>{st.label}</span>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-primary-fixed-dim flex items-center justify-center text-[10px] font-bold text-on-primary-fixed">{getInitials(v.staff_name)}</div>
+                                            <span className="text-sm font-medium text-on-surface">{v.staff_name}</span>
                                         </div>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <p className="text-sm font-semibold text-on-surface">{VISITS[1].date}</p>
-                                    <p className="text-xs text-on-surface-variant">{VISITS[1].time}</p>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <p className="text-sm font-semibold text-on-surface max-w-xs truncate">{VISITS[1].reason}</p>
-                                    <p className="text-xs text-on-surface-variant italic">{VISITS[1].diagnosis}</p>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${VISITS[1].statusBg} ${VISITS[1].statusFg}`}>{VISITS[1].status}</span>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-secondary-fixed-dim flex items-center justify-center text-[10px] font-bold text-on-secondary-fixed">Dr</div>
-                                        <span className="text-sm font-medium text-on-surface">{VISITS[1].staff}</span>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6 text-right">
-                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openEdit(VISITS[1])} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all">
-                                            <span className="material-symbols-outlined text-[20px]">edit</span>
-                                        </button>
-                                        <button onClick={() => openDelete(VISITS[1])} className="p-2 rounded-full hover:bg-error-container/20 text-on-surface-variant hover:text-error transition-all">
-                                            <span className="material-symbols-outlined text-[20px]">delete</span>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-
-                            <tr className="hover:bg-surface-container-low transition-colors group">
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-4">
-                                        <img className="w-12 h-12 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" src={VISITS[2].img} />
-                                        <div>
-                                            <p className="font-bold text-on-surface">{VISITS[2].student}</p>
-                                            <p className="text-xs text-on-surface-variant">{VISITS[2].grade}</p>
+                                    </td>
+                                    <td className="px-8 py-6 text-right">
+                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => openEdit(v)} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all" title="Edit">
+                                                <span className="material-symbols-outlined text-[20px]">edit</span>
+                                            </button>
+                                            <button onClick={() => openDelete(v)} className="p-2 rounded-full hover:bg-error-container/20 text-on-surface-variant hover:text-error transition-all" title="Delete">
+                                                <span className="material-symbols-outlined text-[20px]">delete</span>
+                                            </button>
                                         </div>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <p className="text-sm font-semibold text-on-surface">{VISITS[2].date}</p>
-                                    <p className="text-xs text-on-surface-variant">{VISITS[2].time}</p>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <p className="text-sm font-semibold text-on-surface max-w-xs truncate">{VISITS[2].reason}</p>
-                                    <p className="text-xs text-on-surface-variant italic">{VISITS[2].diagnosis}</p>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${VISITS[2].statusBg} ${VISITS[2].statusFg}`}>{VISITS[2].status}</span>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-primary-fixed-dim flex items-center justify-center text-[10px] font-bold text-on-primary-fixed">NM</div>
-                                        <span className="text-sm font-medium text-on-surface">{VISITS[2].staff}</span>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6 text-right">
-                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openEdit(VISITS[2])} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all">
-                                            <span className="material-symbols-outlined text-[20px]">edit</span>
-                                        </button>
-                                        <button onClick={() => openDelete(VISITS[2])} className="p-2 rounded-full hover:bg-error-container/20 text-on-surface-variant hover:text-error transition-all">
-                                            <span className="material-symbols-outlined text-[20px]">delete</span>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-
-                            <tr className="hover:bg-surface-container-low transition-colors group">
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-4">
-                                        <img className="w-12 h-12 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" src={VISITS[3].img} />
-                                        <div>
-                                            <p className="font-bold text-on-surface">{VISITS[3].student}</p>
-                                            <p className="text-xs text-on-surface-variant">{VISITS[3].grade}</p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <p className="text-sm font-semibold text-on-surface">{VISITS[3].date}</p>
-                                    <p className="text-xs text-on-surface-variant">{VISITS[3].time}</p>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <p className="text-sm font-semibold text-on-surface max-w-xs truncate">{VISITS[3].reason}</p>
-                                    <p className="text-xs text-on-surface-variant italic">{VISITS[3].diagnosis}</p>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${VISITS[3].statusBg} ${VISITS[3].statusFg}`}>{VISITS[3].status}</span>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-secondary-fixed-dim flex items-center justify-center text-[10px] font-bold text-on-secondary-fixed">Dr</div>
-                                        <span className="text-sm font-medium text-on-surface">{VISITS[3].staff}</span>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6 text-right">
-                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openEdit(VISITS[3])} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all">
-                                            <span className="material-symbols-outlined text-[20px]">edit</span>
-                                        </button>
-                                        <button onClick={() => openDelete(VISITS[3])} className="p-2 rounded-full hover:bg-error-container/20 text-on-surface-variant hover:text-error transition-all">
-                                            <span className="material-symbols-outlined text-[20px]">delete</span>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
+                                    </td>
+                                </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
 
                     <div className="px-8 py-6 bg-surface-container-low flex justify-between items-center">
-                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Showing 4 of 124 visits</p>
+                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                            {filtered.length === 0 ? 'No visits found' :
+                                `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} of ${filtered.length} visit${filtered.length !== 1 ? 's' : ''}${(search || filterDate || filterStatus) ? ' (filtered)' : ''}`}
+                        </p>
                         <div className="flex items-center gap-2">
-                            <button className="w-10 h-10 rounded-full bg-surface-container-lowest border border-outline-variant/10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="w-10 h-10 rounded-full bg-surface-container-lowest border border-outline-variant/10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
                                 <span className="material-symbols-outlined">chevron_left</span>
                             </button>
                             <div className="flex items-center gap-1">
-                                <button className="w-10 h-10 rounded-full bg-primary text-on-primary font-bold text-xs">1</button>
-                                <button className="w-10 h-10 rounded-full bg-transparent text-on-surface-variant font-bold text-xs hover:bg-white transition-all">2</button>
-                                <button className="w-10 h-10 rounded-full bg-transparent text-on-surface-variant font-bold text-xs hover:bg-white transition-all">3</button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(n => totalPages <= 5 || Math.abs(n - page) <= 1 || n === 1 || n === totalPages)
+                                    .map((n, idx, arr) => (
+                                        <React.Fragment key={n}>
+                                            {idx > 0 && arr[idx - 1] !== n - 1 && (
+                                                <span className="w-10 h-10 flex items-center justify-center text-on-surface-variant text-xs">…</span>
+                                            )}
+                                            <button
+                                                onClick={() => setPage(n)}
+                                                className={`w-10 h-10 rounded-full font-bold text-xs transition-all ${page === n ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant hover:bg-white'}`}
+                                            >{n}</button>
+                                        </React.Fragment>
+                                    ))}
                             </div>
-                            <button className="w-10 h-10 rounded-full bg-surface-container-lowest border border-outline-variant/10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-all">
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="w-10 h-10 rounded-full bg-surface-container-lowest border border-outline-variant/10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
                                 <span className="material-symbols-outlined">chevron_right</span>
                             </button>
                         </div>
@@ -265,24 +275,23 @@ const Visits = () => {
                 <section className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5">
                         <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Today's Total</p>
-                        <h3 className="text-4xl font-black font-manrope text-on-surface">24</h3>
-                        <div className="mt-4 flex items-center gap-2 text-primary font-bold text-xs">
-                            <span className="material-symbols-outlined text-sm">trending_up</span>
-                            +12% vs yesterday
+                        <h3 className="text-4xl font-black font-manrope text-on-surface">{todayCount}</h3>
+                        <div className="mt-4 flex items-center gap-2 text-on-surface-variant font-bold text-xs">
+                            Visit{todayCount !== 1 ? 's' : ''} recorded today
                         </div>
                     </div>
                     <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5">
-                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Awaiting Treatment</p>
-                        <h3 className="text-4xl font-black font-manrope text-primary">03</h3>
+                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Ongoing Visits</p>
+                        <h3 className="text-4xl font-black font-manrope text-primary">{String(ongoingCount).padStart(2, '0')}</h3>
                         <div className="mt-4 flex items-center gap-2 text-on-surface-variant font-bold text-xs">
-                            Average wait: 8m
+                            Currently in progress
                         </div>
                     </div>
                     <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5 col-span-2 relative overflow-hidden">
                         <div className="relative z-10">
                             <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Most Common Reason</p>
-                            <h3 className="text-3xl font-black font-manrope text-on-surface">Seasonal Flu Symptoms</h3>
-                            <p className="mt-2 text-sm text-on-surface-variant">Recommended: Increase hygiene awareness in East Wing</p>
+                            <h3 className="text-3xl font-black font-manrope text-on-surface">{mostCommonReason}</h3>
+                            <p className="mt-2 text-sm text-on-surface-variant">{mostCommonCount > 0 ? `Reported ${mostCommonCount} time${mostCommonCount !== 1 ? 's' : ''} across all visits` : 'No visit data yet'}</p>
                         </div>
                         <div className="absolute -right-12 -bottom-12 opacity-10">
                             <span className="material-symbols-outlined text-[160px]">health_and_safety</span>
@@ -293,13 +302,13 @@ const Visits = () => {
             </main>
 
             {/* Modals */}
-            <AddEditVisitModal open={addOpen} onClose={() => setAddOpen(false)} />
-            <AddEditVisitModal open={editOpen} onClose={() => setEditOpen(false)} visit={selected} />
+            <AddEditVisitModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={handleAdd} students={students} staff={staffList} />
+            <AddEditVisitModal open={editOpen} onClose={() => setEditOpen(false)} visit={selected} onSubmit={handleEdit} students={students} staff={staffList} />
             <ConfirmDeleteModal
                 open={deleteOpen}
                 onClose={() => setDeleteOpen(false)}
-                onConfirm={() => { alert(`Deleted visit for: ${selected?.student}`); setDeleteOpen(false); }}
-                itemName={selected ? `${selected.student}'s visit on ${selected.date}` : ''}
+                onConfirm={handleDelete}
+                itemName={selected ? `${selected.student_name}'s visit on ${formatDate(selected.visit_date)}` : ''}
                 itemType="visit record"
             />
         </>

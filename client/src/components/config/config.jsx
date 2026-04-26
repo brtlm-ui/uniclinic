@@ -11,4 +11,5 @@ export const endpoints = {
   medicines:     "/api/medicines",
   prescriptions: "/api/prescriptions",
   treatments:    "/api/treatments",
+  notifications: "/api/notifications",
 };

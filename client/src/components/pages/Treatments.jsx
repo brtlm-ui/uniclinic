@@ -1,9 +1,91 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
+import { AddEditTreatmentModal, ConfirmDeleteModal } from '../modals/SharedModals';
+import { config, endpoints } from '../config/config';
 
 const Treatments = () => {
-    return (
+    const [treatments, setTreatments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [addOpen, setAddOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [selected, setSelected] = useState(null);
+    const [page, setPage] = useState(1);
+    const [search, setSearch] = useState('');
+
+    const fetchTreatments = async () => {
+        setLoading(true);
+        try {
+            const res = await axios.get(`${config.uniClinicAPI}${endpoints.treatments}`);
+            setTreatments(res.data);
+        } catch {
+            setError('Failed to load treatments.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchTreatments(); }, []);
+    useEffect(() => { setPage(1); }, [search]);
+
+    const handleAdd = async (form) => {
+        try {
+            await axios.post(`${config.uniClinicAPI}${endpoints.treatments}`, form);
+            fetchTreatments();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to add treatment.');
+        }
+    };
+
+    const handleEdit = async (form) => {
+        try {
+            await axios.put(`${config.uniClinicAPI}${endpoints.treatments}/${selected.treatment_id}`, form);
+            fetchTreatments();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to update treatment.');
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await axios.delete(`${config.uniClinicAPI}${endpoints.treatments}/${selected.treatment_id}`);
+            setDeleteOpen(false);
+            fetchTreatments();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to delete treatment.');
+        }
+    };
+
+    const openEdit = (t) => { setSelected(t); setEditOpen(true); };
+    const openDelete = (t) => { setSelected(t); setDeleteOpen(true); };
+
+    // Derived stats
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const thisMonthCount = treatments.filter(t => {
+        if (!t.visit_date) return false;
+        const d = new Date(t.visit_date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    }).length;
+    const todayCount = treatments.filter(t => t.visit_date?.slice(0, 10) === todayStr).length;
+
+    const filtered = treatments.filter(t => {
+        const q = search.toLowerCase();
+        return !q ||
+            (t.treatment_given || '').toLowerCase().includes(q) ||
+            (t.student_name || '').toLowerCase().includes(q) ||
+            (t.notes || '').toLowerCase().includes(q);
+    });
+
+    const PAGE_SIZE = 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+    return(
         <>
             <Sidebar />
             <main className="ml-72 min-h-screen pt-0 pb-12">
@@ -24,7 +106,9 @@ const Treatments = () => {
                             <img className="w-14 h-14 rounded-full border-4 border-surface object-cover" data-alt="confident male physician in white coat smiling in modern clinic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBURo547Bki2RS8swMUBv-5gBiUpjo4JKy0w0NghRMCxzwHWQP1YKPoV86EA_KmeaKivOhypmixbQhdqr84XR0xzxktK7oy03HuSWgQsp8p3MuJ9NdjZUDJjZSo91IP6hOwj2Ct-33Xq2M01fIWhtAER0Ju4pFZY0uehG1Cdvwbl76DirOvKYnIfUDYZ29gZ3dHmqR1Qcf9f6U7G0KFAnYwZ54wOW95JgsxX_BArJfZ9KP5LBsO_5IuebmJg-P4Jf-4wXZSJ6rWLHI" />
                             <div className="w-14 h-14 rounded-full border-4 border-surface bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-sm">+4</div>
                         </div>
-                        <button className="bg-primary text-on-primary px-10 py-4 rounded-full font-bold shadow-xl shadow-primary/20 flex items-center gap-3 active:scale-95 transition-all">
+                        <button
+                            onClick={() => setAddOpen(true)}
+                            className="bg-primary text-on-primary px-10 py-4 rounded-full font-bold shadow-xl shadow-primary/20 flex items-center gap-3 active:scale-95 transition-all">
                             <span className="material-symbols-outlined">add</span>
                             New Record
                         </button>
@@ -33,18 +117,19 @@ const Treatments = () => {
 
                 <section className="px-8 grid grid-cols-12 gap-8 mb-16">
                     <div className="col-span-8 bg-surface-container-lowest rounded-xl p-10 flex items-center gap-12 shadow-sm">
-                        <div className="h-32 w-32 rounded-full border-[10px] border-primary-fixed flex items-center justify-center">
-                            <span className="text-3xl font-black text-primary">88%</span>
+                        <div className="h-32 w-32 rounded-full border-[10px] border-primary-fixed flex items-center justify-center flex-shrink-0">
+                            <span className="text-3xl font-black text-primary">{treatments.length}</span>
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold mb-2">Daily Completion</h3>
-                            <p className="text-on-surface-variant max-w-sm">Treatment records updated within 1 hour of patient visit. Maintaining high clinical compliance.</p>
+                            <h3 className="text-2xl font-bold mb-2">Total Records</h3>
+                            <p className="text-on-surface-variant max-w-sm">All treatment records logged in the system across all patient visits.</p>
+                            <p className="mt-3 text-sm font-bold text-primary">{todayCount} recorded today</p>
                         </div>
                     </div>
                     <div className="col-span-4 bg-tertiary-container rounded-xl p-10 flex flex-col justify-between text-on-tertiary-container">
                         <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: '\'FILL\' 1' }}>analytics</span>
                         <div>
-                            <div className="text-4xl font-black">1,240</div>
+                            <div className="text-4xl font-black">{thisMonthCount.toLocaleString()}</div>
                             <div className="font-bold opacity-80">Treatments This Month</div>
                         </div>
                     </div>
@@ -54,14 +139,17 @@ const Treatments = () => {
                     <div className="p-8 flex justify-between items-center bg-surface-container-low/30">
                         <div className="relative w-96">
                             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
-                            <input className="w-full pl-12 pr-4 py-3 bg-surface rounded-full border-none focus:ring-2 focus:ring-primary/20 transition-all text-sm" placeholder="Search treatment logs..." type="text" />
+                            <input
+                                className="w-full pl-12 pr-4 py-3 bg-surface rounded-full border-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                                placeholder="Search by treatment, student, or notes..."
+                                type="text"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
                         </div>
                         <div className="flex gap-4">
-                            <button className="p-3 rounded-full hover:bg-surface-variant transition-colors">
+                            <button onClick={() => setSearch('')} className="p-3 rounded-full hover:bg-surface-variant transition-colors" title="Clear search">
                                 <span className="material-symbols-outlined text-on-surface-variant">filter_list</span>
-                            </button>
-                            <button className="p-3 rounded-full hover:bg-surface-variant transition-colors">
-                                <span className="material-symbols-outlined text-on-surface-variant">download</span>
                             </button>
                         </div>
                     </div>
@@ -71,112 +159,88 @@ const Treatments = () => {
                             <thead>
                                 <tr className="bg-surface-container-low/50">
                                     <th className="px-8 py-5 text-xs font-bold uppercase tracking-widest text-outline">Treatment ID</th>
-                                    <th className="px-8 py-5 text-xs font-bold uppercase tracking-widest text-outline">Visit ID</th>
+                                    <th className="px-8 py-5 text-xs font-bold uppercase tracking-widest text-outline">Student</th>
+                                    <th className="px-8 py-5 text-xs font-bold uppercase tracking-widest text-outline">Visit Date</th>
                                     <th className="px-8 py-5 text-xs font-bold uppercase tracking-widest text-outline">Treatment Given</th>
                                     <th className="px-8 py-5 text-xs font-bold uppercase tracking-widest text-outline">Notes</th>
-                                    <th className="px-8 py-5 text-xs font-bold uppercase tracking-widest text-outline text-right">Status</th>
+                                    <th className="px-8 py-5 text-xs font-bold uppercase tracking-widest text-outline text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-surface-container">
 
-                                <tr className="group hover:bg-surface-container-low transition-colors">
-                                    <td className="px-8 py-6 font-bold text-primary">TR-8821</td>
-                                    <td className="px-8 py-6 text-on-surface-variant font-mono text-sm">VST-44910</td>
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-primary text-lg">medical_information</span>
+                                {loading ? (
+                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">Loading treatments...</td></tr>
+                                ) : error ? (
+                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-error">{error}</td></tr>
+                                ) : treatments.length === 0 ? (
+                                    <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">No treatment records found.</td></tr>
+                                ) : paged.length === 0 ? (
+                                    <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">No records match your search.</td></tr>
+                                ) : paged.map((t) => (
+                                    <tr key={t.treatment_id} className="group hover:bg-surface-container-low transition-colors">
+                                        <td className="px-8 py-6 font-bold text-primary">TR-{t.treatment_id}</td>
+                                        <td className="px-8 py-6">
+                                            <span className="font-semibold text-on-surface">{t.student_name || `Visit #${t.visit_id}`}</span>
+                                        </td>
+                                        <td className="px-8 py-6 text-sm text-on-surface-variant">
+                                            {t.visit_date ? new Date(t.visit_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center flex-shrink-0">
+                                                    <span className="material-symbols-outlined text-primary text-lg">healing</span>
+                                                </div>
+                                                <span className="font-bold">{t.treatment_given}</span>
                                             </div>
-                                            <span className="font-bold">Nebulization Therapy</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6 text-sm text-on-surface-variant max-w-xs truncate">Administered 2.5mg Albuterol via nebulizer for acute respiratory distress.</td>
-                                    <td className="px-8 py-6 text-right">
-                                        <span className="bg-secondary-container text-on-secondary-container px-4 py-1.5 rounded-full text-xs font-bold">COMPLETED</span>
-                                    </td>
-                                </tr>
-
-                                <tr className="group hover:bg-surface-container-low transition-colors">
-                                    <td className="px-8 py-6 font-bold text-primary">TR-8822</td>
-                                    <td className="px-8 py-6 text-on-surface-variant font-mono text-sm">VST-44912</td>
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-tertiary-container/20 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-tertiary text-lg">healing</span>
+                                        </td>
+                                        <td className="px-8 py-6 text-sm text-on-surface-variant max-w-xs truncate">{t.notes || '—'}</td>
+                                        <td className="px-8 py-6 text-right">
+                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => openEdit(t)} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all">
+                                                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                                                </button>
+                                                <button onClick={() => openDelete(t)} className="p-2 rounded-full hover:bg-error-container/20 text-on-surface-variant hover:text-error transition-all">
+                                                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                                                </button>
                                             </div>
-                                            <span className="font-bold">Wound Debridement</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6 text-sm text-on-surface-variant max-w-xs truncate">Cleaned and dressed grade 2 abrasion on right knee. Applied sterile gauze.</td>
-                                    <td className="px-8 py-6 text-right">
-                                        <span className="bg-secondary-container text-on-secondary-container px-4 py-1.5 rounded-full text-xs font-bold">COMPLETED</span>
-                                    </td>
-                                </tr>
-
-                                <tr className="group hover:bg-surface-container-low transition-colors">
-                                    <td className="px-8 py-6 font-bold text-primary">TR-8823</td>
-                                    <td className="px-8 py-6 text-on-surface-variant font-mono text-sm">VST-44915</td>
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-error-container/10 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-error text-lg">emergency</span>
-                                            </div>
-                                            <span className="font-bold">Anaphylaxis Protocol</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6 text-sm text-on-surface-variant max-w-xs truncate">Emergency EpiPen injection (0.3mg) followed by antihistamines. 911 called.</td>
-                                    <td className="px-8 py-6 text-right">
-                                        <span className="bg-error-container text-on-error-container px-4 py-1.5 rounded-full text-xs font-bold">URGENT</span>
-                                    </td>
-                                </tr>
-
-                                <tr className="group hover:bg-surface-container-low transition-colors">
-                                    <td className="px-8 py-6 font-bold text-primary">TR-8824</td>
-                                    <td className="px-8 py-6 text-on-surface-variant font-mono text-sm">VST-44918</td>
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-primary text-lg">thermometer</span>
-                                            </div>
-                                            <span className="font-bold">Fever Management</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6 text-sm text-on-surface-variant max-w-xs truncate">Acetaminophen 500mg provided. Student monitored in recovery room.</td>
-                                    <td className="px-8 py-6 text-right">
-                                        <span className="bg-surface-variant text-on-surface-variant px-4 py-1.5 rounded-full text-xs font-bold">PENDING</span>
-                                    </td>
-                                </tr>
-
-                                <tr className="group hover:bg-surface-container-low transition-colors">
-                                    <td className="px-8 py-6 font-bold text-primary">TR-8825</td>
-                                    <td className="px-8 py-6 text-on-surface-variant font-mono text-sm">VST-44921</td>
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-tertiary-container/20 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-tertiary text-lg">pill</span>
-                                            </div>
-                                            <span className="font-bold">Insulin Injection</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6 text-sm text-on-surface-variant max-w-xs truncate">Supervised self-administration of 4 units Humalog as per meal plan.</td>
-                                    <td className="px-8 py-6 text-right">
-                                        <span className="bg-secondary-container text-on-secondary-container px-4 py-1.5 rounded-full text-xs font-bold">COMPLETED</span>
-                                    </td>
-                                </tr>
+                                        </td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
 
                     <div className="p-8 border-t border-surface-container flex justify-between items-center">
-                        <span className="text-sm font-medium text-on-surface-variant">Showing 5 of 1,240 records</span>
+                        <span className="text-sm font-medium text-on-surface-variant">
+                            {filtered.length === 0 ? 'No records found' :
+                                `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} of ${filtered.length} record${filtered.length !== 1 ? 's' : ''}${search ? ' (filtered)' : ''}`}
+                        </span>
                         <div className="flex gap-2">
-                            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-variant text-on-surface transition-colors">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-variant text-on-surface transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
                                 <span className="material-symbols-outlined">chevron_left</span>
                             </button>
-                            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-on-primary font-bold shadow-md">1</button>
-                            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-variant text-on-surface transition-colors">2</button>
-                            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-variant text-on-surface transition-colors">3</button>
-                            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-variant text-on-surface transition-colors">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter(n => totalPages <= 5 || Math.abs(n - page) <= 1 || n === 1 || n === totalPages)
+                                .map((n, idx, arr) => (
+                                    <React.Fragment key={n}>
+                                        {idx > 0 && arr[idx - 1] !== n - 1 && (
+                                            <span className="w-10 h-10 flex items-center justify-center text-on-surface-variant text-xs">…</span>
+                                        )}
+                                        <button
+                                            onClick={() => setPage(n)}
+                                            className={`w-10 h-10 flex items-center justify-center rounded-full font-bold text-sm shadow-md transition-colors ${page === n ? 'bg-primary text-on-primary' : 'bg-surface-container hover:bg-surface-variant text-on-surface'}`}
+                                        >{n}</button>
+                                    </React.Fragment>
+                                ))}
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-variant text-on-surface transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
                                 <span className="material-symbols-outlined">chevron_right</span>
                             </button>
                         </div>
@@ -209,6 +273,16 @@ const Treatments = () => {
                 </section>
             </main>
 
+            {/* Modals */}
+            <AddEditTreatmentModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={handleAdd} />
+            <AddEditTreatmentModal open={editOpen} onClose={() => setEditOpen(false)} treatment={selected} onSubmit={handleEdit} />
+            <ConfirmDeleteModal
+                open={deleteOpen}
+                onClose={() => setDeleteOpen(false)}
+                onConfirm={handleDelete}
+                itemName={selected ? `TR-${selected.treatment_id}: ${selected.treatment_given}` : ''}
+                itemType="treatment record"
+            />
         </>
     );
 };

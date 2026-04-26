@@ -1,22 +1,104 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
 import { AddEditStaffModal, ConfirmDeleteModal } from '../modals/SharedModals';
+import { config, endpoints } from '../config/config';
 
-const STAFF = [
-    { name: 'Dr. Julian Vane', role: 'Doctor', username: 'j.vane_clin', lastActive: '2 mins ago', title: 'Senior Practitioner', roleBg: 'bg-sky-100 text-sky-800 border-sky-200', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDaIIyLz1eVUa_XRAAIbSP3eB_4LbAx0gcV-DskRnS0QkJA6846JLaY-BLlFifTWf67OQPNSgz5KPvU5mwM6vYW--p8YiH0cis7OdQp8omNm5gWA7LoYPOgdByyWwiG_ofU1pqTutLMIViMJoqsC7q128YZpliVx_7hDmPbB0K6eDIKqePM9gpZ_9devLiBFaozPSqzfr79-9m6ScZmwDXiHZ77Jb8s9-kNZ2xFn5RzQvfbVJDnZWoRpr9z0xZV4S-OFZ5O0yPQl2U' },
-    { name: 'Clara Henderson', role: 'Nurse', username: 'clara.h_care', lastActive: '1 hour ago', title: 'Registered Nurse', roleBg: 'bg-tertiary-container text-on-tertiary-container border-tertiary-fixed-dim', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA-AKFjRGCU_Cee-wObk6guTQnjycNfsEzz97CxKpI_M8zZU2BoORq7J6O_fIEm36_lHbdp97vJX4Y9ofH8hEgrixpQi7bCu5oUp_VBl6ASStTwzipYKOobQbiYCGjKlPHfnkkPTobvVwE1Kbj_4vZy8ntpmoq7mdh6LGFHYUjBpFbGOZC3a6SiB7fha6AaAb0P2csmhzMweOytiRJAFSW8ElsEFqqllwVaLVqA0g2gZoFl4uL8aw-Avikm-OudJYMPRho46S9A_F0' },
-    { name: 'Marcus Chen', role: 'Administrator', username: 'm.chen_root', lastActive: 'Online', title: 'System Administrator', roleBg: 'bg-secondary-container text-on-secondary-container border-outline-variant/30', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBMhcFgCtlMfdgRyTkqXrwsqhrUg_y3lvVZtDFUm689XOy__4x0rv_ccGIPVL3ZkS6092M8ap2dZBPd4P3nlUa2x-lc1kbtw-0uGa8QKlLq3shQyCjV7O082pTlTLmyjlFYmv1BrOmvu5UB6I5PcCqutcad6rTm2uD2zOAEHGiXrsM6vm1MWLsbGocji-ZH1a7jU_JqgPPwBt9dwIoiWICBhdEss8B0YGWt1K_nP5J0zJzEEVImlwaj3Mk2h3v1qH8wtxbX2phKNKQ' },
-];
+const getRoleBadge = (role) => {
+    if (role === 'doctor') return 'bg-sky-100 text-sky-800 border border-sky-200';
+    if (role === 'nurse') return 'bg-tertiary-container text-on-tertiary-container border border-tertiary-fixed-dim';
+    return 'bg-secondary-container text-on-secondary-container border border-outline-variant/30';
+};
+
+const getInitials = (name = '') => name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+
+const timeAgo = (dateStr) => {
+    if (!dateStr) return '—';
+    const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
 
 const StaffManagement = () => {
+    const [staff, setStaff] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [addOpen, setAddOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [selected, setSelected] = useState(null);
+    const [page, setPage] = useState(1);
+    const [search, setSearch] = useState('');
+
+    const fetchStaff = async () => {
+        setLoading(true);
+        try {
+            const res = await axios.get(`${config.uniClinicAPI}${endpoints.staff}`);
+            setStaff(res.data);
+        } catch {
+            setError('Failed to load staff.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchStaff(); }, []);
+    useEffect(() => { setPage(1); }, [search]);
+
+    const handleAdd = async (form) => {
+        try {
+            await axios.post(`${config.uniClinicAPI}${endpoints.staff}`, form);
+            fetchStaff();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to add staff.');
+        }
+    };
+
+    const handleEdit = async (form) => {
+        const payload = { name: form.name, role: form.role, username: form.username };
+        if (form.password) payload.password = form.password;
+        try {
+            await axios.put(`${config.uniClinicAPI}${endpoints.staff}/${selected.staff_id}`, payload);
+            fetchStaff();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to update staff.');
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await axios.delete(`${config.uniClinicAPI}${endpoints.staff}/${selected.staff_id}`);
+            setDeleteOpen(false);
+            fetchStaff();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to delete staff.');
+        }
+    };
 
     const openEdit = (s) => { setSelected(s); setEditOpen(true); };
     const openDelete = (s) => { setSelected(s); setDeleteOpen(true); };
+
+    // Real stats
+    const doctorCount = staff.filter(s => s.role === 'doctor').length;
+    const nurseCount = staff.filter(s => s.role === 'nurse').length;
+    const adminCount = staff.filter(s => s.role === 'admin').length;
+
+    const filtered = staff.filter(s => {
+        const q = search.toLowerCase();
+        return !q ||
+            (s.name || '').toLowerCase().includes(q) ||
+            (s.role || '').toLowerCase().includes(q) ||
+            (s.username || '').toLowerCase().includes(q);
+    });
+
+    const PAGE_SIZE = 10;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
     return (
         <>
             <Sidebar />
@@ -44,14 +126,14 @@ const StaffManagement = () => {
                         <div className="bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-outline-variant/10">
                             <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Total Active Staff</p>
                             <div className="flex items-end gap-2">
-                                <span className="text-4xl font-black text-on-surface">24</span>
-                                <span className="text-primary font-bold mb-1">+2 this month</span>
+                                <span className="text-4xl font-black text-on-surface">{staff.length}</span>
                             </div>
+                            <p className="text-xs text-on-surface-variant mt-2">{doctorCount} doctor{doctorCount !== 1 ? 's' : ''} · {nurseCount} nurse{nurseCount !== 1 ? 's' : ''} · {adminCount} admin{adminCount !== 1 ? 's' : ''}</p>
                         </div>
                         <div className="bg-primary text-on-primary p-8 rounded-xl shadow-xl shadow-primary/10">
-                            <p className="text-xs font-bold uppercase tracking-widest text-on-primary/70 mb-4">On Duty Now</p>
+                            <p className="text-xs font-bold uppercase tracking-widest text-on-primary/70 mb-4">Doctors on Staff</p>
                             <div className="flex items-end gap-2">
-                                <span className="text-4xl font-black">6</span>
+                                <span className="text-4xl font-black">{doctorCount}</span>
                                 <span className="text-on-primary/80 mb-1">Clinical Personnel</span>
                             </div>
                         </div>
@@ -68,13 +150,17 @@ const StaffManagement = () => {
                     <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
                         <div className="px-8 py-6 flex justify-between items-center bg-surface-container-low/50">
                             <h3 className="font-bold text-xl text-on-surface">Staff Directory</h3>
-                            <div className="flex gap-2">
-                                <button className="p-2 rounded-lg hover:bg-white text-on-surface-variant">
-                                    <span className="material-symbols-outlined">filter_list</span>
-                                </button>
-                                <button className="p-2 rounded-lg hover:bg-white text-on-surface-variant">
-                                    <span className="material-symbols-outlined">more_vert</span>
-                                </button>
+                            <div className="flex items-center gap-3">
+                                <div className="relative">
+                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">search</span>
+                                    <input
+                                        className="pl-10 pr-4 py-2 bg-surface rounded-full border-none focus:ring-2 focus:ring-primary/20 transition-all text-sm w-64"
+                                        placeholder="Search by name, role, or username..."
+                                        type="text"
+                                        value={search}
+                                        onChange={e => setSearch(e.target.value)}
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="overflow-x-auto">
@@ -90,103 +176,76 @@ const StaffManagement = () => {
                                 </thead>
                                 <tbody className="divide-y divide-surface-container-high">
 
-                                    <tr className="hover:bg-surface-container-low/30 transition-colors group">
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-4">
-                                                <div className="h-12 w-12 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden border-2 border-surface-container">
-                                                    <img alt="Dr. Julian Vane" data-alt="portrait of a middle-aged male doctor with glasses and short hair, neutral studio background, professional lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaIIyLz1eVUa_XRAAIbSP3eB_4LbAx0gcV-DskRnS0QkJA6846JLaY-BLlFifTWf67OQPNSgz5KPvU5mwM6vYW--p8YiH0cis7OdQp8omNm5gWA7LoYPOgdByyWwiG_ofU1pqTutLMIViMJoqsC7q128YZpliVx_7hDmPbB0K6eDIKqePM9gpZ_9devLiBFaozPSqzfr79-9m6ScZmwDXiHZ77Jb8s9-kNZ2xFn5RzQvfbVJDnZWoRpr9z0xZV4S-OFZ5O0yPQl2U" />
+                                    {loading ? (
+                                        <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">Loading staff...</td></tr>
+                                    ) : error ? (
+                                        <tr><td colSpan={5} className="px-8 py-12 text-center text-error">{error}</td></tr>
+                                    ) : staff.length === 0 ? (
+                                        <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">No staff found.</td></tr>
+                                    ) : paged.length === 0 ? (
+                                        <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">No staff match your search.</td></tr>
+                                    ) : paged.map((s) => (
+                                        <tr key={s.staff_id} className="hover:bg-surface-container-low/30 transition-colors group">
+                                            <td className="px-8 py-6">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="h-12 w-12 rounded-full bg-primary-container flex-shrink-0 flex items-center justify-center text-on-primary-container font-bold text-sm">
+                                                        {getInitials(s.name)}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-on-surface group-hover:text-primary transition-colors">{s.name}</p>
+                                                        <p className="text-xs text-on-surface-variant capitalize">{s.role}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="font-bold text-on-surface group-hover:text-primary transition-colors">Dr. Julian Vane</p>
-                                                    <p className="text-xs text-on-surface-variant">Senior Practitioner</p>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter ${getRoleBadge(s.role)}`}>{s.role}</span>
+                                            </td>
+                                            <td className="px-8 py-6 font-mono text-sm text-on-surface-variant">{s.username}</td>
+                                            <td className="px-8 py-6 text-sm text-on-surface-variant">{timeAgo(s.last_active)}</td>
+                                            <td className="px-8 py-6 text-right">
+                                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => openEdit(s)} className="w-10 h-10 rounded-full hover:bg-secondary-container text-on-secondary-container flex items-center justify-center transition-all" title="Edit">
+                                                        <span className="material-symbols-outlined text-[20px]">edit_square</span>
+                                                    </button>
+                                                    <button onClick={() => openDelete(s)} className="w-10 h-10 rounded-full hover:bg-error-container text-on-error-container flex items-center justify-center transition-all" title="Delete">
+                                                        <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
+                                                    </button>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter bg-sky-100 text-sky-800 border border-sky-200">Doctor</span>
-                                        </td>
-                                        <td className="px-8 py-6 font-mono text-sm text-on-surface-variant">j.vane_clin</td>
-                                        <td className="px-8 py-6 text-sm text-on-surface-variant">2 mins ago</td>
-                                        <td className="px-8 py-6 text-right">
-                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => openEdit(STAFF[0])} className="w-10 h-10 rounded-full hover:bg-secondary-container text-on-secondary-container flex items-center justify-center transition-all" title="Edit">
-                                                    <span className="material-symbols-outlined text-[20px]">edit_square</span>
-                                                </button>
-                                                <button onClick={() => openDelete(STAFF[0])} className="w-10 h-10 rounded-full hover:bg-error-container text-on-error-container flex items-center justify-center transition-all" title="Delete">
-                                                    <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-
-                                    <tr className="hover:bg-surface-container-low/30 transition-colors group">
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-4">
-                                                <div className="h-12 w-12 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden border-2 border-surface-container">
-                                                    <img alt="Nurse Clara" data-alt="young female nurse with tied hair smiling warmly, soft daylight in a modern clinic corridor" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-AKFjRGCU_Cee-wObk6guTQnjycNfsEzz97CxKpI_M8zZU2BoORq7J6O_fIEm36_lHbdp97vJX4Y9ofH8hEgrixpQi7bCu5oUp_VBl6ASStTwzipYKOobQbiYCGjKlPHfnkkPTobvVwE1Kbj_4vZy8ntpmoq7mdh6LGFHYUjBpFbGOZC3a6SiB7fha6AaAb0P2csmhzMweOytiRJAFSW8ElsEFqqllwVaLVqA0g2gZoFl4uL8aw-Avikm-OudJYMPRho46S9A_F0" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-on-surface group-hover:text-primary transition-colors">Clara Henderson</p>
-                                                    <p className="text-xs text-on-surface-variant">Registered Nurse</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter bg-tertiary-container text-on-tertiary-container border border-tertiary-fixed-dim">Nurse</span>
-                                        </td>
-                                        <td className="px-8 py-6 font-mono text-sm text-on-surface-variant">clara.h_care</td>
-                                        <td className="px-8 py-6 text-sm text-on-surface-variant">1 hour ago</td>
-                                        <td className="px-8 py-6 text-right">
-                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => openEdit(STAFF[1])} className="w-10 h-10 rounded-full hover:bg-secondary-container text-on-secondary-container flex items-center justify-center transition-all" title="Edit">
-                                                    <span className="material-symbols-outlined text-[20px]">edit_square</span>
-                                                </button>
-                                                <button onClick={() => openDelete(STAFF[1])} className="w-10 h-10 rounded-full hover:bg-error-container text-on-error-container flex items-center justify-center transition-all" title="Delete">
-                                                    <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-
-                                    <tr className="hover:bg-surface-container-low/30 transition-colors group">
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-4">
-                                                <div className="h-12 w-12 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden border-2 border-surface-container">
-                                                    <img alt="Marcus Chen" data-alt="smiling young asian male administrator in casual business attire, bright office background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMhcFgCtlMfdgRyTkqXrwsqhrUg_y3lvVZtDFUm689XOy__4x0rv_ccGIPVL3ZkS6092M8ap2dZBPd4P3nlUa2x-lc1kbtw-0uGa8QKlLq3shQyCjV7O082pTlTLmyjlFYmv1BrOmvu5UB6I5PcCqutcad6rTm2uD2zOAEHGiXrsM6vm1MWLsbGocji-ZH1a7jU_JqgPPwBt9dwIoiWICBhdEss8B0YGWt1K_nP5J0zJzEEVImlwaj3Mk2h3v1qH8wtxbX2phKNKQ" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-on-surface group-hover:text-primary transition-colors">Marcus Chen</p>
-                                                    <p className="text-xs text-on-surface-variant">System Administrator</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter bg-secondary-container text-on-secondary-container border border-outline-variant/30">Admin</span>
-                                        </td>
-                                        <td className="px-8 py-6 font-mono text-sm text-on-surface-variant">m.chen_root</td>
-                                        <td className="px-8 py-6 text-sm text-on-surface-variant">Online</td>
-                                        <td className="px-8 py-6 text-right">
-                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => openEdit(STAFF[2])} className="w-10 h-10 rounded-full hover:bg-secondary-container text-on-secondary-container flex items-center justify-center transition-all" title="Edit">
-                                                    <span className="material-symbols-outlined text-[20px]">edit_square</span>
-                                                </button>
-                                                <button onClick={() => openDelete(STAFF[2])} className="w-10 h-10 rounded-full hover:bg-error-container text-on-error-container flex items-center justify-center transition-all" title="Delete">
-                                                    <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
                         <div className="px-8 py-6 flex justify-between items-center text-sm font-medium text-on-surface-variant">
-                            <span>Showing 3 of 24 Staff Members</span>
+                            <span>
+                                {filtered.length === 0 ? 'No staff found' :
+                                    `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} of ${filtered.length} staff member${filtered.length !== 1 ? 's' : ''}${search ? ' (filtered)' : ''}`}
+                            </span>
                             <div className="flex gap-1">
-                                <button className="px-4 py-2 rounded-full hover:bg-surface-container-low transition-colors">Previous</button>
-                                <button className="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-full">1</button>
-                                <button className="w-10 h-10 flex items-center justify-center hover:bg-surface-container-low rounded-full">2</button>
-                                <button className="w-10 h-10 flex items-center justify-center hover:bg-surface-container-low rounded-full">3</button>
-                                <button className="px-4 py-2 rounded-full hover:bg-surface-container-low transition-colors">Next</button>
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="px-4 py-2 rounded-full hover:bg-surface-container-low transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                >Previous</button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(n => totalPages <= 5 || Math.abs(n - page) <= 1 || n === 1 || n === totalPages)
+                                    .map((n, idx, arr) => (
+                                        <React.Fragment key={n}>
+                                            {idx > 0 && arr[idx - 1] !== n - 1 && (
+                                                <span className="w-10 h-10 flex items-center justify-center text-xs">…</span>
+                                            )}
+                                            <button
+                                                onClick={() => setPage(n)}
+                                                className={`w-10 h-10 flex items-center justify-center rounded-full font-bold transition-colors ${page === n ? 'bg-primary text-on-primary' : 'hover:bg-surface-container-low'}`}
+                                            >{n}</button>
+                                        </React.Fragment>
+                                    ))}
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className="px-4 py-2 rounded-full hover:bg-surface-container-low transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                >Next</button>
                             </div>
                         </div>
                     </div>
@@ -220,12 +279,12 @@ const StaffManagement = () => {
             </main>
 
             {/* Modals */}
-            <AddEditStaffModal open={addOpen} onClose={() => setAddOpen(false)} />
-            <AddEditStaffModal open={editOpen} onClose={() => setEditOpen(false)} staff={selected} />
+            <AddEditStaffModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={handleAdd} />
+            <AddEditStaffModal open={editOpen} onClose={() => setEditOpen(false)} staff={selected} onSubmit={handleEdit} />
             <ConfirmDeleteModal
                 open={deleteOpen}
                 onClose={() => setDeleteOpen(false)}
-                onConfirm={() => { alert(`Removed: ${selected?.name}`); setDeleteOpen(false); }}
+                onConfirm={handleDelete}
                 itemName={selected?.name}
                 itemType="staff member"
             />

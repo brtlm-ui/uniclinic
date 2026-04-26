@@ -34,12 +34,14 @@ const NAV_LINKS = [
     {
         icon: 'assessment',
         label: 'Reports',
-        path: '/reports'
+        path: '/reports',
+        adminOnly: true
     },
     {
         icon: 'badge',
         label: 'Staff',
-        path: '/staff'
+        path: '/staff',
+        adminOnly: true
     }
 ];
 

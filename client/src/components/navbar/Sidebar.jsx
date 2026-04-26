@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { NAV_LINKS } from '../config/Constants'
 import { LogoutModal } from '../modals/SharedModals'
@@ -9,6 +9,16 @@ const cookies = new Cookies()
 function Sidebar() {
     const navigate = useNavigate()
     const [logoutOpen, setLogoutOpen] = useState(false)
+
+    const userRole = useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user'))?.role || ''
+        } catch { return '' }
+    }, [])
+
+    const visibleLinks = useMemo(() =>
+        NAV_LINKS.filter(link => !link.adminOnly || userRole === 'admin')
+    , [userRole])
 
     const handleLogout = () => {
         cookies.remove('TOKEN', { path: '/' })
@@ -37,7 +47,7 @@ function Sidebar() {
                     </div>
                 </div>
                 <div className="flex-1 space-y-1 overflow-y-auto">
-                    {NAV_LINKS.map((link) => (
+                    {visibleLinks.map((link) => (
                         <NavLink
                             key={link.path}
                             to={link.path}

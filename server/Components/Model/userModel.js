@@ -8,13 +8,18 @@ async function initStaffTable() {
   const db = getDB();
   await db.execute(`
     CREATE TABLE IF NOT EXISTS staff (
-      staff_id  INT(11)      NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      name      VARCHAR(100) NOT NULL,
-      role      ENUM('admin','nurse','doctor') NOT NULL,
-      username  VARCHAR(50)  NOT NULL UNIQUE,
-      password  VARCHAR(255) NOT NULL
+      staff_id    INT(11)      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      name        VARCHAR(100) NOT NULL,
+      role        ENUM('admin','nurse','doctor') NOT NULL,
+      username    VARCHAR(50)  NOT NULL UNIQUE,
+      password    VARCHAR(255) NOT NULL,
+      email       VARCHAR(150) NULL DEFAULT NULL,
+      last_active DATETIME     NULL DEFAULT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
   `);
+  // Add columns to existing tables created before these fields existed
+  await db.execute(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS last_active DATETIME NULL DEFAULT NULL;`);
+  await db.execute(`ALTER TABLE staff ADD COLUMN IF NOT EXISTS email VARCHAR(150) NULL DEFAULT NULL;`);
   console.log('staff table ready');
 }
 
@@ -51,7 +56,7 @@ async function createStaff({ name, role, username, password }) {
 async function findAllStaff() {
   const db = getDB();
   const [rows] = await db.query(
-    `SELECT staff_id, name, role, username FROM staff`
+    `SELECT staff_id, name, role, username, email, last_active FROM staff`
   );
   return rows;
 }
@@ -59,7 +64,7 @@ async function findAllStaff() {
 async function findStaffById(id) {
   const db = getDB();
   const [rows] = await db.execute(
-    `SELECT staff_id, name, role, username FROM staff WHERE staff_id = ?`,
+    `SELECT staff_id, name, role, username, email, last_active FROM staff WHERE staff_id = ?`,
     [id]
   );
   return rows[0] || null;
@@ -76,7 +81,7 @@ async function findStaffByUsername(username) {
 
 async function updateStaff(id, fields) {
   const db = getDB();
-  const allowed = ['name', 'role', 'username', 'password'];
+  const allowed = ['name', 'role', 'username', 'password', 'email'];
   const setClauses = [];
   const values = [];
 
@@ -106,6 +111,14 @@ async function deleteStaff(id) {
   return result.affectedRows;
 }
 
+async function updateLastActive(id) {
+  const db = getDB();
+  await db.execute(
+    `UPDATE staff SET last_active = NOW() WHERE staff_id = ?`,
+    [id]
+  );
+}
+
 module.exports = {
   initStaffTable,
   validateStaff,
@@ -115,4 +128,5 @@ module.exports = {
   findStaffByUsername,
   updateStaff,
   deleteStaff,
+  updateLastActive,
 };
