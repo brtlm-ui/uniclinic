@@ -268,10 +268,10 @@ const Dashboard = () => {
                                                 </div>
                                             </div>
                                             {/* Bar container */}
-                                            <div className="w-full flex-1 bg-surface-container-high rounded-t-full overflow-hidden relative">
+                                            <div className="w-full flex-1 bg-surface-container-high rounded-full overflow-hidden relative">
                                                 <div
                                                     className={`absolute bottom-0 w-full transition-all duration-700 ${isPeak ? 'bg-primary shadow-lg shadow-primary/30' : 'bg-primary-container group-hover:bg-primary/60'}`}
-                                                    style={{ height: `${d.height}%` }}
+                                                    style={{ height: `${d.height}%`, borderRadius: 'inherit' }}
                                                 ></div>
                                             </div>
                                             <span className={`text-[11px] font-bold uppercase tracking-wider flex-shrink-0 ${isPeak ? 'text-primary' : 'text-on-surface-variant'}`}>{d.month}</span>
