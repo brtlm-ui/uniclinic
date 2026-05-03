@@ -26,11 +26,25 @@ async function createPrescription({ visit_id, medicine_id, quantity }) {
 
 async function findAllPrescriptions() {
   const db = getDB();
+  // 4-table JOIN: prescriptions → medicines, visits → students
   const [rows] = await db.query(`
-    SELECT p.*, m.name AS medicine_name
+    SELECT
+      p.prescription_id,
+      p.visit_id,
+      p.medicine_id,
+      p.quantity,
+      m.name                                    AS medicine_name,
+      m.stock_quantity                          AS medicine_stock,
+      v.visit_date,
+      v.visit_time,
+      v.status                                  AS visit_status,
+      CONCAT(s.first_name, ' ', s.last_name)   AS student_name,
+      s.student_number
     FROM prescriptions p
     LEFT JOIN medicines m ON p.medicine_id = m.medicine_id
-    ORDER BY p.prescription_id
+    LEFT JOIN visits    v ON p.visit_id    = v.visit_id
+    LEFT JOIN students  s ON v.student_id  = s.student_id
+    ORDER BY v.visit_date DESC, p.prescription_id
   `);
   return rows;
 }
@@ -48,10 +62,24 @@ async function findPrescriptionById(id) {
 
 async function findPrescriptionsByVisit(visit_id) {
   const db = getDB();
+  // 4-table JOIN: prescriptions → medicines, visits → students
   const [rows] = await db.execute(`
-    SELECT p.*, m.name AS medicine_name
+    SELECT
+      p.prescription_id,
+      p.visit_id,
+      p.medicine_id,
+      p.quantity,
+      m.name                                    AS medicine_name,
+      m.stock_quantity                          AS medicine_stock,
+      m.expiration_date,
+      v.visit_date,
+      v.visit_time,
+      CONCAT(s.first_name, ' ', s.last_name)   AS student_name,
+      s.student_number
     FROM prescriptions p
     LEFT JOIN medicines m ON p.medicine_id = m.medicine_id
+    LEFT JOIN visits    v ON p.visit_id    = v.visit_id
+    LEFT JOIN students  s ON v.student_id  = s.student_id
     WHERE p.visit_id = ?
   `, [visit_id]);
   return rows;

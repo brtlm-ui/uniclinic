@@ -12,4 +12,12 @@ export const endpoints = {
   prescriptions: "/api/prescriptions",
   treatments:    "/api/treatments",
   notifications: "/api/notifications",
+  statistics: {
+    dashboard:     "/api/statistics/dashboard",
+    medicines:     "/api/statistics/medicines",
+    visits:        "/api/statistics/visits",
+    monthlyTrends: "/api/statistics/monthly-trends",
+    students:      "/api/statistics/students",
+    staff:         "/api/statistics/staff",
+  },
 };

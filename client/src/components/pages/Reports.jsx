@@ -6,21 +6,21 @@ import { config, endpoints } from '../config/config';
 
 const Reports = () => {
     const [visits, setVisits] = useState([]);
-    const [prescriptions, setPrescriptions] = useState([]);
-    const [medicines, setMedicines] = useState([]);
+    const [medStats, setMedStats] = useState([]);
+    const [dashSummary, setDashSummary] = useState({});
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchAll = async () => {
             try {
-                const [vRes, pRes, mRes] = await Promise.all([
-                    axios.get(`${config.uniClinicAPI}${endpoints.visits}`),
-                    axios.get(`${config.uniClinicAPI}${endpoints.prescriptions}`),
-                    axios.get(`${config.uniClinicAPI}${endpoints.medicines}`),
+                const [vRes, mRes, dRes] = await Promise.all([
+                    axios.get(`${config.uniClinicAPI}${endpoints.statistics.visits}`),
+                    axios.get(`${config.uniClinicAPI}${endpoints.statistics.medicines}`),
+                    axios.get(`${config.uniClinicAPI}${endpoints.statistics.dashboard}`),
                 ]);
                 setVisits(vRes.data);
-                setPrescriptions(pRes.data);
-                setMedicines(mRes.data);
+                setMedStats(mRes.data);
+                setDashSummary(dRes.data);
             } catch (err) {
                 console.error('Failed to load report data', err);
             } finally {
@@ -47,9 +47,10 @@ const Reports = () => {
     const maxCount = Math.max(...dailyCounts.map(d => d.count), 1);
     const avgCount = Math.round(dailyCounts.reduce((s, d) => s + d.count, 0) / 30);
 
-    // ── Summary stats ─────────────────────────────────────────────────────────
-    const totalConsultations = visits.length;
-    const unitsDispensed = prescriptions.reduce((s, p) => s + (Number(p.quantity) || 0), 0);
+    // ── Summary stats from server aggregation ────────────────────────────────
+    const totalConsultations = Number(dashSummary.total_visits) || 0;
+    const unitsDispensed     = medStats.reduce((s, m) => s + (Number(m.total_dispensed) || 0), 0);
+    const lowStockCount      = Number(dashSummary.low_stock_count) || 0;
 
     // ── Top reasons for visit ─────────────────────────────────────────────────
     const reasonTally = {};
@@ -66,22 +67,17 @@ const Reports = () => {
             pct: totalConsultations > 0 ? Math.round((count / totalConsultations) * 100) : 0,
         }));
 
-    // ── Stock utilization (top prescribed medicines) ──────────────────────────
-    const medUsage = {};
-    prescriptions.forEach(p => {
-        const key = p.medicine_name || `Medicine #${p.medicine_id}`;
-        medUsage[key] = (medUsage[key] || 0) + (Number(p.quantity) || 0);
-    });
-    const topMeds = Object.entries(medUsage)
-        .sort((a, b) => b[1] - a[1])
+    // ── Top prescribed medicines — from server-aggregated medicine stats ──────
+    const topMeds = [...medStats]
+        .filter(m => m.total_dispensed > 0)
+        .sort((a, b) => b.total_dispensed - a.total_dispensed)
         .slice(0, 4)
-        .map(([name, volume]) => ({ name, volume }));
+        .map(m => ({ name: m.medicine_name, volume: Number(m.total_dispensed) }));
 
-    // ── Critical stock alert ──────────────────────────────────────────────────
-    const criticalMed = medicines
+    // ── Critical stock alert — lowest stock from medicine stats ──────────────
+    const criticalMed = [...medStats]
         .filter(m => m.stock_quantity !== null && m.stock_quantity !== undefined)
         .sort((a, b) => a.stock_quantity - b.stock_quantity)[0];
-    const lowStockCount = medicines.filter(m => m.stock_quantity <= 20).length;
 
     if (loading) {
         return (

@@ -33,7 +33,7 @@ const Medicines = () => {
     const fetchMedicines = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`${config.uniClinicAPI}${endpoints.medicines}`);
+            const res = await axios.get(`${config.uniClinicAPI}${endpoints.statistics.medicines}`);
             setMedicines(res.data);
         } catch {
             setError('Failed to load medicines.');
@@ -76,7 +76,7 @@ const Medicines = () => {
     const openEdit = (m) => { setSelected(m); setEditOpen(true); };
     const openDelete = (m) => { setSelected(m); setDeleteOpen(true); };
 
-    // Real stats
+    // Real stats — derived from enriched statistics/medicines response
     const totalSKU = medicines.length;
     const lowStockCount = medicines.filter(m => m.stock_quantity <= 20).length;
     const expiringSoonCount = medicines.filter(m => {
@@ -84,6 +84,7 @@ const Medicines = () => {
         const days = (new Date(m.expiration_date) - new Date()) / (1000 * 60 * 60 * 24);
         return days > 0 && days <= 30;
     }).length;
+    const totalDispensed = medicines.reduce((s, m) => s + (Number(m.total_dispensed) || 0), 0);
 
     const filtered = medicines.filter(m => {
         const q = search.toLowerCase();
@@ -116,7 +117,7 @@ const Medicines = () => {
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
                         <div className="bg-surface-container-lowest p-8 rounded-xl flex flex-col justify-between h-48 border border-outline-variant/10">
                             <div className="flex justify-between items-start">
                                 <span className="material-symbols-outlined text-primary text-3xl">inventory_2</span>
@@ -145,6 +146,16 @@ const Medicines = () => {
                             <div>
                                 <div className="text-4xl font-bold text-on-surface">{expiringSoonCount}</div>
                                 <div className="text-sm text-on-surface-variant">Within next 30 days</div>
+                            </div>
+                        </div>
+                        <div className="bg-primary/10 p-8 rounded-xl flex flex-col justify-between h-48 border border-primary/10">
+                            <div className="flex justify-between items-start">
+                                <span className="material-symbols-outlined text-primary text-3xl">medication_liquid</span>
+                                <span className="text-xs font-bold uppercase tracking-tighter text-on-surface-variant">Total Dispensed</span>
+                            </div>
+                            <div>
+                                <div className="text-4xl font-bold text-on-surface">{totalDispensed.toLocaleString()}</div>
+                                <div className="text-sm text-on-surface-variant">Units given across all visits</div>
                             </div>
                         </div>
                     </div>
@@ -178,6 +189,7 @@ const Medicines = () => {
                                     <th className="px-8 py-6">Medicine Name</th>
                                     <th className="px-8 py-6">Stock Quantity</th>
                                     <th className="px-8 py-6">Expiration Date</th>
+                                    <th className="px-8 py-6">Times Prescribed</th>
                                     <th className="px-8 py-6">Status</th>
                                     <th className="px-8 py-6 text-right">Actions</th>
                                 </tr>
@@ -185,13 +197,13 @@ const Medicines = () => {
                             <tbody className="divide-y divide-surface-container-low">
 
                                 {loading ? (
-                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">Loading medicines...</td></tr>
+                                    <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">Loading medicines...</td></tr>
                                 ) : error ? (
-                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-error">{error}</td></tr>
+                                    <tr><td colSpan={6} className="px-8 py-12 text-center text-error">{error}</td></tr>
                                 ) : medicines.length === 0 ? (
-                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">No medicines found.</td></tr>
+                                    <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">No medicines found.</td></tr>
                                 ) : paged.length === 0 ? (
-                                    <tr><td colSpan={5} className="px-8 py-12 text-center text-on-surface-variant">No medicines match your search.</td></tr>
+                                    <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">No medicines match your search.</td></tr>
                                 ) : paged.map((m) => {
                                     const status = getMedicineStatus(m);
                                     return (
@@ -212,6 +224,10 @@ const Medicines = () => {
                                         </td>
                                         <td className="px-8 py-6">
                                             <span className="text-on-surface-variant font-medium">{formatDate(m.expiration_date)}</span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="font-semibold text-on-surface">{Number(m.times_prescribed) || 0}</div>
+                                            <div className="text-xs text-on-surface-variant">{Number(m.total_dispensed) || 0} units total</div>
                                         </td>
                                         <td className="px-8 py-6">
                                             <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${status.cls}`}>

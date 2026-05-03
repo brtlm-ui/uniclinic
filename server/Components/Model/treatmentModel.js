@@ -45,7 +45,26 @@ async function findTreatmentById(id) {
 
 async function findTreatmentsByVisit(visit_id) {
   const db = getDB();
-  const [rows] = await db.execute(`SELECT * FROM treatments WHERE visit_id = ?`, [visit_id]);
+  // 3-table JOIN: treatments → visits → students
+  const [rows] = await db.execute(`
+    SELECT
+      t.treatment_id,
+      t.visit_id,
+      t.treatment_given,
+      t.notes,
+      v.visit_date,
+      v.visit_time,
+      v.reason,
+      v.diagnosis,
+      v.status                                  AS visit_status,
+      CONCAT(s.first_name, ' ', s.last_name)   AS student_name,
+      s.student_number,
+      s.course
+    FROM treatments t
+    LEFT JOIN visits   v ON t.visit_id   = v.visit_id
+    LEFT JOIN students s ON v.student_id = s.student_id
+    WHERE t.visit_id = ?
+  `, [visit_id]);
   return rows;
 }
 

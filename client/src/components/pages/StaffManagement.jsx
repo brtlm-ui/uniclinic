@@ -25,6 +25,7 @@ const timeAgo = (dateStr) => {
 
 const StaffManagement = () => {
     const [staff, setStaff] = useState([]);
+    const [dashSummary, setDashSummary] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [addOpen, setAddOpen] = useState(false);
@@ -37,8 +38,12 @@ const StaffManagement = () => {
     const fetchStaff = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`${config.uniClinicAPI}${endpoints.staff}`);
-            setStaff(res.data);
+            const [sRes, dRes] = await Promise.all([
+                axios.get(`${config.uniClinicAPI}${endpoints.staff}`),
+                axios.get(`${config.uniClinicAPI}${endpoints.statistics.dashboard}`),
+            ]);
+            setStaff(sRes.data);
+            setDashSummary(dRes.data);
         } catch {
             setError('Failed to load staff.');
         } finally {
@@ -82,10 +87,11 @@ const StaffManagement = () => {
     const openEdit = (s) => { setSelected(s); setEditOpen(true); };
     const openDelete = (s) => { setSelected(s); setDeleteOpen(true); };
 
-    // Real stats
+    // Real stats — role counts still computed locally, total from server aggregation
     const doctorCount = staff.filter(s => s.role === 'doctor').length;
     const nurseCount = staff.filter(s => s.role === 'nurse').length;
     const adminCount = staff.filter(s => s.role === 'admin').length;
+    const totalStaff = Number(dashSummary.total_staff) || staff.length;
 
     const filtered = staff.filter(s => {
         const q = search.toLowerCase();
@@ -126,7 +132,7 @@ const StaffManagement = () => {
                         <div className="bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-outline-variant/10">
                             <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Total Active Staff</p>
                             <div className="flex items-end gap-2">
-                                <span className="text-4xl font-black text-on-surface">{staff.length}</span>
+                                <span className="text-4xl font-black text-on-surface">{totalStaff}</span>
                             </div>
                             <p className="text-xs text-on-surface-variant mt-2">{doctorCount} doctor{doctorCount !== 1 ? 's' : ''} · {nurseCount} nurse{nurseCount !== 1 ? 's' : ''} · {adminCount} admin{adminCount !== 1 ? 's' : ''}</p>
                         </div>

@@ -8,17 +8,19 @@ import { config, endpoints } from '../config/config';
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-function buildMonthlyData(visits) {
+/** Build monthly bar data from the /statistics/monthly-trends payload */
+function buildMonthlyData(trends) {
     const year = new Date().getFullYear();
     const counts = Array(12).fill(0);
-    visits.forEach(v => {
-        const d = new Date(v.visit_date);
-        if (d.getFullYear() === year) counts[d.getMonth()]++;
+    trends.forEach(t => {
+        const [y, m] = t.month.split('-').map(Number);
+        if (y === year) counts[m - 1] = t.total_visits;
     });
     const max = Math.max(...counts, 1);
     return MONTH_NAMES.map((month, i) => ({ month, count: counts[i], height: Math.round((counts[i] / max) * 100) }));
 }
 
+/** Build weekly bar data from the /statistics/visits payload */
 function buildWeeklyData(visits) {
     const today = new Date();
     const dow = today.getDay();
@@ -33,7 +35,7 @@ function buildWeeklyData(visits) {
         if (diff >= 0 && diff < 7) counts[diff]++;
     });
     const max = Math.max(...counts, 1);
-    return DAY_NAMES.map((month, i) => ({ month, count: counts[i], height: Math.round((counts[i] / max) * 100) }));
+    return DAY_NAMES.map((day, i) => ({ month: day, count: counts[i], height: Math.round((counts[i] / max) * 100) }));
 }
 
 const Dashboard = () => {
@@ -46,6 +48,7 @@ const Dashboard = () => {
 
     const [stats, setStats] = useState({
         studentCount: 0, todayVisits: 0, totalVisits: 0, lowStockCount: 0,
+        outOfStockCount: 0, totalStaff: 0, totalPrescriptions: 0,
         recentVisits: [], monthlyData: emptyMonthly, weeklyData: emptyWeekly,
         peakMonthName: '—', peakMonthCount: 0, monthlyAvg: 0,
     });
@@ -55,31 +58,45 @@ const Dashboard = () => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const [sRes, vRes, mRes] = await Promise.all([
-                    axios.get(`${config.uniClinicAPI}${endpoints.students}`),
-                    axios.get(`${config.uniClinicAPI}${endpoints.visits}`),
-                    axios.get(`${config.uniClinicAPI}${endpoints.medicines}`),
+                // Use statistics endpoints — server does the aggregation
+                const [dashRes, trendsRes, visitsRes] = await Promise.all([
+                    axios.get(`${config.uniClinicAPI}${endpoints.statistics.dashboard}`),
+                    axios.get(`${config.uniClinicAPI}${endpoints.statistics.monthlyTrends}`),
+                    axios.get(`${config.uniClinicAPI}${endpoints.statistics.visits}`),
                 ]);
-                const students = sRes.data;
-                const visits = vRes.data;
-                const medicines = mRes.data;
+
+                const dash   = dashRes.data;
+                const trends = trendsRes.data;
+                const visits = visitsRes.data;
+
                 const today = new Date().toDateString();
                 const todayVisits = visits.filter(v => new Date(v.visit_date).toDateString() === today).length;
-                const lowStockCount = medicines.filter(m => m.stock_quantity <= 20).length;
-                const recentVisits = [...visits].sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date)).slice(0, 5);
 
-                const monthlyData = buildMonthlyData(visits);
-                const weeklyData = buildWeeklyData(visits);
+                const recentVisits = [...visits]
+                    .sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date))
+                    .slice(0, 5);
+
+                const monthlyData = buildMonthlyData(trends);
+                const weeklyData  = buildWeeklyData(visits);
 
                 const peakIdx = monthlyData.reduce((best, d, i) => d.count > monthlyData[best].count ? i : best, 0);
-                const peakMonthName = monthlyData[peakIdx].count > 0 ? `${MONTH_NAMES[peakIdx]} ${new Date().getFullYear()}` : '—';
+                const peakMonthName  = monthlyData[peakIdx].count > 0 ? `${MONTH_NAMES[peakIdx]} ${new Date().getFullYear()}` : '—';
                 const peakMonthCount = monthlyData[peakIdx].count;
-                const monthlyAvg = Math.round(monthlyData.reduce((s, d) => s + d.count, 0) / 12);
 
                 setStats({
-                    studentCount: students.length, todayVisits, totalVisits: visits.length,
-                    lowStockCount, recentVisits, monthlyData, weeklyData,
-                    peakMonthName, peakMonthCount, monthlyAvg,
+                    studentCount:       Number(dash.total_students)      || 0,
+                    todayVisits,
+                    totalVisits:        Number(dash.total_visits)         || 0,
+                    lowStockCount:      Number(dash.low_stock_count)      || 0,
+                    outOfStockCount:    Number(dash.out_of_stock_count)   || 0,
+                    totalStaff:         Number(dash.total_staff)          || 0,
+                    totalPrescriptions: Number(dash.total_prescriptions)  || 0,
+                    monthlyAvg:         Number(dash.avg_monthly_visits)   || 0,
+                    recentVisits,
+                    monthlyData,
+                    weeklyData,
+                    peakMonthName,
+                    peakMonthCount,
                 });
             } catch {
                 // silently fail — dashboard stats are non-critical

@@ -7,6 +7,7 @@ import { config, endpoints } from '../config/config';
 
 const Treatments = () => {
     const [treatments, setTreatments] = useState([]);
+    const [dashSummary, setDashSummary] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [addOpen, setAddOpen] = useState(false);
@@ -19,8 +20,12 @@ const Treatments = () => {
     const fetchTreatments = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`${config.uniClinicAPI}${endpoints.treatments}`);
-            setTreatments(res.data);
+            const [tRes, dRes] = await Promise.all([
+                axios.get(`${config.uniClinicAPI}${endpoints.treatments}`),
+                axios.get(`${config.uniClinicAPI}${endpoints.statistics.dashboard}`),
+            ]);
+            setTreatments(tRes.data);
+            setDashSummary(dRes.data);
         } catch {
             setError('Failed to load treatments.');
         } finally {
@@ -62,7 +67,7 @@ const Treatments = () => {
     const openEdit = (t) => { setSelected(t); setEditOpen(true); };
     const openDelete = (t) => { setSelected(t); setDeleteOpen(true); };
 
-    // Derived stats
+    // Derived stats — total from server, month/today still computed from list
     const todayStr = new Date().toISOString().slice(0, 10);
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
@@ -72,6 +77,7 @@ const Treatments = () => {
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     }).length;
     const todayCount = treatments.filter(t => t.visit_date?.slice(0, 10) === todayStr).length;
+    const totalTreatments = Number(dashSummary.total_treatments) || treatments.length;
 
     const filtered = treatments.filter(t => {
         const q = search.toLowerCase();
@@ -118,7 +124,7 @@ const Treatments = () => {
                 <section className="px-8 grid grid-cols-12 gap-8 mb-16">
                     <div className="col-span-8 bg-surface-container-lowest rounded-xl p-10 flex items-center gap-12 shadow-sm">
                         <div className="h-32 w-32 rounded-full border-[10px] border-primary-fixed flex items-center justify-center flex-shrink-0">
-                            <span className="text-3xl font-black text-primary">{treatments.length}</span>
+                            <span className="text-3xl font-black text-primary">{totalTreatments}</span>
                         </div>
                         <div>
                             <h3 className="text-2xl font-bold mb-2">Total Records</h3>

@@ -70,6 +70,41 @@ async function deleteStudent(id) {
   return result.affectedRows;
 }
 
+/**
+ * Returns all students with their visit summary.
+ * Uses a correlated subquery to count total medicines received across all visits.
+ * Aggregation: COUNT, MAX, MIN, SUM (via CASE).
+ */
+async function findStudentsWithVisitSummary() {
+  const db = getDB();
+  const [rows] = await db.query(`
+    SELECT
+      s.student_id,
+      s.student_number,
+      CONCAT(s.first_name, ' ', s.last_name)                   AS student_name,
+      s.course,
+      s.year_level,
+      s.contact_number,
+      COUNT(v.visit_id)                                         AS total_visits,
+      COALESCE(MAX(v.visit_date), NULL)                         AS last_visit_date,
+      COALESCE(MIN(v.visit_date), NULL)                         AS first_visit_date,
+      SUM(CASE WHEN v.status = 'completed' THEN 1 ELSE 0 END)  AS completed_visits,
+      SUM(CASE WHEN v.status = 'ongoing'   THEN 1 ELSE 0 END)  AS ongoing_visits,
+      (
+        SELECT COALESCE(SUM(p.quantity), 0)
+        FROM prescriptions p
+        INNER JOIN visits v2 ON p.visit_id = v2.visit_id
+        WHERE v2.student_id = s.student_id
+      )                                                         AS total_medicines_received
+    FROM students s
+    LEFT JOIN visits v ON s.student_id = v.student_id
+    GROUP BY s.student_id, s.student_number, s.first_name, s.last_name,
+             s.course, s.year_level, s.contact_number
+    ORDER BY total_visits DESC
+  `);
+  return rows;
+}
+
 module.exports = {
   initStudentsTable,
   createStudent,
@@ -78,4 +113,5 @@ module.exports = {
   findStudentByNumber,
   updateStudent,
   deleteStudent,
+  findStudentsWithVisitSummary,
 };

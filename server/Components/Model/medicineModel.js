@@ -60,6 +60,37 @@ async function deleteMedicine(id) {
   return result.affectedRows;
 }
 
+/**
+ * Joins medicines → prescriptions → visits (3 tables).
+ * Returns each medicine with aggregated prescription usage stats
+ * and a correlated subquery for the last date it was dispensed.
+ */
+async function findMedicinesWithUsageStats() {
+  const db = getDB();
+  const [rows] = await db.query(`
+    SELECT
+      m.medicine_id,
+      m.name                                    AS medicine_name,
+      m.stock_quantity,
+      m.expiration_date,
+      COUNT(p.prescription_id)                  AS times_prescribed,
+      COALESCE(SUM(p.quantity), 0)              AS total_dispensed,
+      COALESCE(ROUND(AVG(p.quantity), 2), 0)    AS avg_per_prescription,
+      (
+        SELECT MAX(v2.visit_date)
+        FROM prescriptions p2
+        JOIN visits v2 ON p2.visit_id = v2.visit_id
+        WHERE p2.medicine_id = m.medicine_id
+      )                                         AS last_dispensed_date
+    FROM medicines m
+    LEFT JOIN prescriptions p ON m.medicine_id = p.medicine_id
+    LEFT JOIN visits        v ON p.visit_id    = v.visit_id
+    GROUP BY m.medicine_id, m.name, m.stock_quantity, m.expiration_date
+    ORDER BY total_dispensed DESC
+  `);
+  return rows;
+}
+
 module.exports = {
   initMedicinesTable,
   createMedicine,
@@ -67,4 +98,5 @@ module.exports = {
   findMedicineById,
   updateMedicine,
   deleteMedicine,
+  findMedicinesWithUsageStats,
 };

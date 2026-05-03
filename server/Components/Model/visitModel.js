@@ -83,6 +83,42 @@ async function deleteVisit(id) {
   return result.affectedRows;
 }
 
+/**
+ * Returns visits enriched with prescription counts.
+ * 4-table JOIN: visits → students, staff, prescriptions.
+ * Aggregation: COUNT, SUM.
+ */
+async function findVisitsWithPrescriptionCount() {
+  const db = getDB();
+  const [rows] = await db.query(`
+    SELECT
+      v.visit_id,
+      v.visit_date,
+      v.visit_time,
+      v.reason,
+      v.diagnosis,
+      v.status,
+      CONCAT(s.first_name, ' ', s.last_name)  AS student_name,
+      s.student_number,
+      s.course,
+      s.year_level,
+      st.name                                  AS staff_name,
+      st.role                                  AS staff_role,
+      COUNT(p.prescription_id)                 AS prescription_count,
+      COALESCE(SUM(p.quantity), 0)             AS total_medicines_given
+    FROM visits v
+    LEFT JOIN students      s  ON v.student_id = s.student_id
+    LEFT JOIN staff         st ON v.staff_id   = st.staff_id
+    LEFT JOIN prescriptions p  ON v.visit_id   = p.visit_id
+    GROUP BY
+      v.visit_id, v.visit_date, v.visit_time, v.reason, v.diagnosis, v.status,
+      s.first_name, s.last_name, s.student_number, s.course, s.year_level,
+      st.name, st.role
+    ORDER BY v.visit_date DESC, v.visit_time DESC
+  `);
+  return rows;
+}
+
 module.exports = {
   initVisitsTable,
   createVisit,
@@ -90,4 +126,5 @@ module.exports = {
   findVisitById,
   updateVisit,
   deleteVisit,
+  findVisitsWithPrescriptionCount,
 };

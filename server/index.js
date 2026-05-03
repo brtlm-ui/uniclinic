@@ -21,6 +21,7 @@ const medicineRoutes         = require('./Components/Router/medicineRoutes');
 const prescriptionRoutes     = require('./Components/Router/prescriptionRoutes');
 const treatmentRoutes        = require('./Components/Router/treatmentRoutes');
 const notificationRoutes     = require('./Components/Router/notificationRoutes');
+const statisticsRoutes       = require('./Components/Router/statisticsRoutes');
 
 const app = express()
 const port = process.env.PORT || 5000;
@@ -54,6 +55,7 @@ app.use('/api/medicines',     medicineRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/treatments',    treatmentRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/statistics',    statisticsRoutes);
 
 // Listen on enviroment port or 5000
 async function startServer() {

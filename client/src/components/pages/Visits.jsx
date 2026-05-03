@@ -42,7 +42,7 @@ const Visits = () => {
         setLoading(true);
         try {
             const [vRes, sRes, stRes] = await Promise.all([
-                axios.get(`${config.uniClinicAPI}${endpoints.visits}`),
+                axios.get(`${config.uniClinicAPI}${endpoints.statistics.visits}`),
                 axios.get(`${config.uniClinicAPI}${endpoints.students}`),
                 axios.get(`${config.uniClinicAPI}${endpoints.staff}`),
             ]);
