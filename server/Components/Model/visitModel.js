@@ -34,6 +34,7 @@ async function findAllVisits() {
   const [rows] = await db.query(`
     SELECT v.*, 
            CONCAT(s.first_name, ' ', s.last_name) AS student_name,
+           s.student_number,
            st.name AS staff_name
     FROM visits v
     LEFT JOIN students s  ON v.student_id = s.student_id
@@ -48,6 +49,7 @@ async function findVisitById(id) {
   const [rows] = await db.execute(`
     SELECT v.*, 
            CONCAT(s.first_name, ' ', s.last_name) AS student_name,
+           s.student_number,
            st.name AS staff_name
     FROM visits v
     LEFT JOIN students s  ON v.student_id = s.student_id

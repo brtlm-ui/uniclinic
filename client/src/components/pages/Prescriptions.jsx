@@ -6,7 +6,7 @@ import { ConfirmDeleteModal } from '../modals/SharedModals';
 import { config, endpoints } from '../config/config';
 
 /* ── Inline Prescription Modal (API-connected) ── */
-const PrescriptionModal = ({ open, onClose, prescription = null, medicines = [], onSubmit }) => {
+const PrescriptionModal = ({ open, onClose, prescription = null, medicines = [], visits = [], onSubmit }) => {
     const isEdit = !!prescription;
     const [form, setForm] = useState({ visit_id: '', medicine_id: '', quantity: '' });
 
@@ -57,8 +57,20 @@ const PrescriptionModal = ({ open, onClose, prescription = null, medicines = [],
                     <div className="p-8 space-y-5">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Visit ID</label>
-                                <input type="number" min="1" className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" value={form.visit_id} onChange={e => setForm(f => ({ ...f, visit_id: e.target.value }))} placeholder="e.g. 1" required />
+                                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Select Visit</label>
+                                <select 
+                                    className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" 
+                                    value={form.visit_id} 
+                                    onChange={e => setForm(f => ({ ...f, visit_id: e.target.value }))} 
+                                    required
+                                >
+                                    <option value="">Select visit</option>
+                                    {visits.map(v => (
+                                        <option key={v.visit_id} value={v.visit_id}>
+                                            {v.student_name} — {new Date(v.visit_date).toLocaleDateString()}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Quantity (units)</label>
@@ -86,6 +98,7 @@ const PrescriptionModal = ({ open, onClose, prescription = null, medicines = [],
 const Prescriptions = () => {
     const [prescriptions, setPrescriptions] = useState([]);
     const [medicines, setMedicines] = useState([]);
+    const [visits, setVisits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [modalOpen, setModalOpen] = useState(false);
@@ -97,12 +110,14 @@ const Prescriptions = () => {
     const fetchAll = async () => {
         setLoading(true);
         try {
-            const [pRes, mRes] = await Promise.all([
+            const [pRes, mRes, vRes] = await Promise.all([
                 axios.get(`${config.uniClinicAPI}${endpoints.prescriptions}`),
                 axios.get(`${config.uniClinicAPI}${endpoints.medicines}`),
+                axios.get(`${config.uniClinicAPI}${endpoints.visits}`),
             ]);
             setPrescriptions(pRes.data);
             setMedicines(mRes.data);
+            setVisits(vRes.data);
         } catch {
             setError('Failed to load prescriptions.');
         } finally {
@@ -298,6 +313,7 @@ const Prescriptions = () => {
                 onClose={() => setModalOpen(false)}
                 prescription={editingRx}
                 medicines={medicines}
+                visits={visits}
                 onSubmit={editingRx ? handleEdit : handleCreate}
             />
             <ConfirmDeleteModal

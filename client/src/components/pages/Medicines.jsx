@@ -88,7 +88,7 @@ const Medicines = () => {
 
     const filtered = medicines.filter(m => {
         const q = search.toLowerCase();
-        return !q || (m.name || '').toLowerCase().includes(q);
+        return !q || (m.medicine_name || '').toLowerCase().includes(q);
     });
 
     const PAGE_SIZE = 10;
@@ -214,7 +214,7 @@ const Medicines = () => {
                                                     <span className="material-symbols-outlined text-[20px]">medication</span>
                                                 </div>
                                                 <div>
-                                                    <div className="font-bold text-on-surface">{m.name}</div>
+                                                    <div className="font-bold text-on-surface">{m.medicine_name}</div>
                                                     <div className="text-xs text-on-surface-variant">ID: {m.medicine_id}</div>
                                                 </div>
                                             </div>
@@ -280,39 +280,6 @@ const Medicines = () => {
                                 >
                                     <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-16 flex gap-10 items-start">
-                        <div className="flex-1 bg-primary text-on-primary p-12 rounded-lg relative overflow-hidden group">
-                            <div className="relative z-10">
-                                <h3 className="text-3xl font-extrabold mb-4">Stock Optimization AI</h3>
-                                <p className="max-w-md text-primary-container leading-relaxed mb-8">Based on historical trends from flu season, we recommend increasing <b>Paracetamol</b> and <b>Cough Suppressant</b> stock by 25% before November.</p>
-                                <button className="bg-surface-container-lowest text-primary px-6 py-3 rounded-full font-bold shadow-lg">View Recommendations</button>
-                            </div>
-
-                            <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-white/10 rounded-full blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
-                        </div>
-                        <div className="w-80 bg-surface-container-high p-8 rounded-lg">
-                            <h4 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant mb-6">Recent Activity</h4>
-                            <div className="space-y-6">
-                                <div className="flex gap-4">
-                                    <div className="w-1.5 h-1.5 mt-2 rounded-full bg-primary ring-4 ring-primary/10"></div>
-                                    <div>
-                                        <p className="text-sm font-bold text-on-surface">Stock Added</p>
-                                        <p className="text-[11px] text-on-surface-variant">50x Insulin Pens by Nurse Sarah</p>
-                                        <p className="text-[10px] mt-1 text-primary font-medium">10 mins ago</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-4">
-                                    <div className="w-1.5 h-1.5 mt-2 rounded-full bg-error ring-4 ring-error/10"></div>
-                                    <div>
-                                        <p className="text-sm font-bold text-on-surface">Quantity Alert</p>
-                                        <p className="text-[11px] text-on-surface-variant">Bandages below 10 units</p>
-                                        <p className="text-[10px] mt-1 text-error font-medium">2 hours ago</p>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>

@@ -7,6 +7,7 @@ import { config, endpoints } from '../config/config';
 
 const Treatments = () => {
     const [treatments, setTreatments] = useState([]);
+    const [visits, setVisits] = useState([]);
     const [dashSummary, setDashSummary] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -20,12 +21,14 @@ const Treatments = () => {
     const fetchTreatments = async () => {
         setLoading(true);
         try {
-            const [tRes, dRes] = await Promise.all([
+            const [tRes, dRes, vRes] = await Promise.all([
                 axios.get(`${config.uniClinicAPI}${endpoints.treatments}`),
                 axios.get(`${config.uniClinicAPI}${endpoints.statistics.dashboard}`),
+                axios.get(`${config.uniClinicAPI}${endpoints.visits}`),
             ]);
             setTreatments(tRes.data);
             setDashSummary(dRes.data);
+            setVisits(vRes.data);
         } catch {
             setError('Failed to load treatments.');
         } finally {
@@ -280,8 +283,8 @@ const Treatments = () => {
             </main>
 
             {/* Modals */}
-            <AddEditTreatmentModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={handleAdd} />
-            <AddEditTreatmentModal open={editOpen} onClose={() => setEditOpen(false)} treatment={selected} onSubmit={handleEdit} />
+            <AddEditTreatmentModal open={addOpen} onClose={() => setAddOpen(false)} visits={visits} onSubmit={handleAdd} />
+            <AddEditTreatmentModal open={editOpen} onClose={() => setEditOpen(false)} treatment={selected} visits={visits} onSubmit={handleEdit} />
             <ConfirmDeleteModal
                 open={deleteOpen}
                 onClose={() => setDeleteOpen(false)}

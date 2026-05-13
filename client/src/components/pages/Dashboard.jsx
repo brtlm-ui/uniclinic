@@ -174,6 +174,7 @@ const Dashboard = () => {
                                 <div className="text-on-surface-variant font-medium text-sm">Total Visits</div>
                             </div>
                         </div>
+                        {stats.lowStockCount > 0 ? (
                         <div className="col-span-2 bg-error-container/10 p-8 rounded-xl flex items-center justify-between border border-error-container/20">
                             <div className="flex items-center gap-6">
                                 <div className="w-16 h-16 rounded-full bg-error-container flex items-center justify-center text-on-error-container">
@@ -181,7 +182,7 @@ const Dashboard = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-2xl font-bold text-error-dim">Low Stock Alert</h3>
-                                    <p className="text-error-dim opacity-70">{stats.lowStockCount > 0 ? `${stats.lowStockCount} essential medicine${stats.lowStockCount !== 1 ? 's' : ''} require immediate restocking.` : 'All medicines are sufficiently stocked.'}</p>
+                                    <p className="text-error-dim opacity-70">{stats.lowStockCount} essential medicine{stats.lowStockCount !== 1 ? 's' : ''} require immediate restocking.</p>
                                 </div>
                             </div>
                             <button
@@ -191,6 +192,25 @@ const Dashboard = () => {
                                 Manage Inventory
                             </button>
                         </div>
+                        ) : (
+                        <div className="col-span-2 bg-tertiary-container/10 p-8 rounded-xl flex items-center justify-between border border-tertiary-container/20">
+                            <div className="flex items-center gap-6">
+                                <div className="w-16 h-16 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container">
+                                    <span className="material-symbols-outlined text-3xl" data-icon="check_circle" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-tertiary">Stock Levels Healthy</h3>
+                                    <p className="text-tertiary opacity-70">All medicines are sufficiently stocked.</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => navigate('/medicines')}
+                                className="bg-tertiary text-white px-8 py-4 rounded-full font-bold text-sm hover:scale-105 transition-transform"
+                            >
+                                View Inventory
+                            </button>
+                        </div>
+                        )}
                     </div>
                 </section>
 
@@ -324,7 +344,7 @@ const Dashboard = () => {
                 <section className="px-8">
                     <div className="flex items-center justify-between mb-8">
                         <h2 className="text-3xl font-extrabold tracking-tight">Recent Visits</h2>
-                        <button onClick={() => window.location.hash = '/visits'} className="text-primary font-bold hover:underline flex items-center gap-1">
+                        <button onClick={() => navigate('/visits')} className="text-primary font-bold hover:underline flex items-center gap-1">
                             View All
                             <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                         </button>

@@ -32,9 +32,9 @@ function Header({ children, hasSearch = false, searchPlaceholder = 'Search...' }
 
     return (
         <>
-            <header className="sticky top-0 z-40 bg-white dark:bg-slate-950 flex justify-between items-center w-full px-8 py-4 h-20 shadow-sm shadow-sky-900/5">
+            <header className="sticky top-0 z-40 bg-white flex justify-between items-center w-full px-8 py-4 h-20 shadow-sm shadow-sky-900/5">
                 <div className="flex items-center gap-8">
-                    <h2 className="text-2xl font-black font-manrope text-sky-700 dark:text-sky-300">UniClinic</h2>
+                    <h2 className="text-2xl font-black font-manrope text-sky-700">UniClinic</h2>
                     {hasSearch && (
                         <div className="relative group">
                             <span className="absolute inset-y-0 left-4 flex items-center text-slate-400">

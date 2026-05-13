@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import Sidebar from '../navbar/Sidebar';
 import Header from '../navbar/Header';
 import { useNavigate } from 'react-router-dom';
@@ -90,6 +92,72 @@ const Visits = () => {
     const openEdit = (v) => { setSelected(v); setEditOpen(true); };
     const openDelete = (v) => { setSelected(v); setDeleteOpen(true); };
 
+    const exportToPDF = () => {
+        const doc = new jsPDF('landscape');
+        
+        // Title
+        doc.setFontSize(20);
+        doc.text('Clinical Serenity - Clinic Visits Report', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+        
+        // Date
+        doc.setFontSize(10);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+        
+        // Prepare table data
+        const tableData = filtered.map(v => {
+            const prescriptions = (() => {
+                try {
+                    if (v.prescriptions) {
+                        const parsed = typeof v.prescriptions === 'string' ? JSON.parse(v.prescriptions) : v.prescriptions;
+                        if (Array.isArray(parsed)) {
+                            return parsed.map(p => `${p.medicine_name} (${p.quantity}x)`).join(', ') || 'None';
+                        }
+                    }
+                } catch (e) {}
+                return 'None';
+            })();
+            
+            return [
+                v.student_name || 'N/A',
+                v.student_number || 'N/A',
+                formatDate(v.visit_date),
+                formatTime(v.visit_time),
+                v.reason || '—',
+                prescriptions,
+                v.status,
+                v.staff_name || 'N/A'
+            ];
+        });
+        
+        // Create table
+        doc.autoTable({
+            head: [['Student Name', 'ID', 'Date', 'Time', 'Reason', 'Medicines', 'Status', 'Staff']],
+            body: tableData,
+            startY: 28,
+            theme: 'grid',
+            headStyles: { fillColor: [63, 81, 181], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 10 },
+            bodyStyles: { fontSize: 9 },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            margin: { top: 28, right: 10, bottom: 10, left: 10 },
+            didDrawPage: () => {
+                // Footer
+                const pageSize = doc.internal.pageSize;
+                const pageHeight = pageSize.getHeight();
+                const pageWidth = pageSize.getWidth();
+                doc.setFontSize(8);
+                doc.text(
+                    `Page ${doc.internal.pages.length - 1}`,
+                    pageWidth / 2,
+                    pageHeight - 10,
+                    { align: 'center' }
+                );
+            }
+        });
+        
+        // Save PDF
+        doc.save(`clinic-visits-${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
     // Derived — filter
     const filtered = visits.filter(v => {
         const q = search.toLowerCase();
@@ -102,8 +170,12 @@ const Visits = () => {
     });
 
     // Stats computed from real data
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const todayCount = visits.filter(v => v.visit_date?.slice(0, 10) === todayStr).length;
+    const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+    const todayCount = visits.filter(v => {
+        if (!v.visit_date) return false;
+        const vDate = new Date(v.visit_date).toLocaleDateString('en-CA');
+        return vDate === todayStr;
+    }).length;
     const ongoingCount = visits.filter(v => v.status === 'ongoing').length;
     const reasonCounts = {};
     visits.forEach(v => { if (v.reason) { const r = v.reason.trim(); reasonCounts[r] = (reasonCounts[r] || 0) + 1; } });
@@ -129,7 +201,7 @@ const Visits = () => {
                         <p className="text-on-surface-variant text-lg leading-relaxed">Monitoring the pulse of our student community. Manage daily encounters with Clinical Serenity's intuitive intake system.</p>
                     </div>
                     <div className="flex gap-4">
-                        <button className="bg-surface-container-lowest text-primary px-8 py-4 rounded-full font-bold flex items-center gap-2 shadow-sm border border-outline-variant/10 hover:bg-white transition-all">
+                        <button onClick={exportToPDF} className="bg-surface-container-lowest text-primary px-8 py-4 rounded-full font-bold flex items-center gap-2 shadow-sm border border-outline-variant/10 hover:bg-white transition-all">
                             <span className="material-symbols-outlined">filter_list</span>
                             Export Data
                         </button>
@@ -140,6 +212,33 @@ const Visits = () => {
                             <span className="material-symbols-outlined">add</span>
                             New Visit
                         </button>
+                    </div>
+                </section>
+
+                <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+                    <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5">
+                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Today's Total</p>
+                        <h3 className="text-4xl font-black font-manrope text-on-surface">{todayCount}</h3>
+                        <div className="mt-4 flex items-center gap-2 text-on-surface-variant font-bold text-xs">
+                            Visit{todayCount !== 1 ? 's' : ''} recorded today
+                        </div>
+                    </div>
+                    <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5">
+                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Ongoing Visits</p>
+                        <h3 className="text-4xl font-black font-manrope text-primary">{String(ongoingCount).padStart(2, '0')}</h3>
+                        <div className="mt-4 flex items-center gap-2 text-on-surface-variant font-bold text-xs">
+                            Currently in progress
+                        </div>
+                    </div>
+                    <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5 col-span-2 relative overflow-hidden">
+                        <div className="relative z-10">
+                            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Most Common Reason</p>
+                            <h3 className="text-3xl font-black font-manrope text-on-surface">{mostCommonReason}</h3>
+                            <p className="mt-2 text-sm text-on-surface-variant">{mostCommonCount > 0 ? `Reported ${mostCommonCount} time${mostCommonCount !== 1 ? 's' : ''} across all visits` : 'No visit data yet'}</p>
+                        </div>
+                        <div className="absolute -right-12 -bottom-12 opacity-10">
+                            <span className="material-symbols-outlined text-[160px]">health_and_safety</span>
+                        </div>
                     </div>
                 </section>
 
@@ -172,6 +271,7 @@ const Visits = () => {
                                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Student Details</th>
                                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Visit Timing</th>
                                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Reason &amp; Diagnosis</th>
+                                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Prescriptions</th>
                                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Status</th>
                                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Attending Staff</th>
                                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Actions</th>
@@ -180,13 +280,23 @@ const Visits = () => {
                         <tbody className="divide-y divide-surface-container">
 
                             {loading ? (
-                                <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">Loading visits...</td></tr>
+                                <tr><td colSpan={7} className="px-8 py-12 text-center text-on-surface-variant">Loading visits...</td></tr>
                             ) : error ? (
-                                <tr><td colSpan={6} className="px-8 py-12 text-center text-error">{error}</td></tr>
+                                <tr><td colSpan={7} className="px-8 py-12 text-center text-error">{error}</td></tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan={6} className="px-8 py-12 text-center text-on-surface-variant">No visits match your filters.</td></tr>
+                                <tr><td colSpan={7} className="px-8 py-12 text-center text-on-surface-variant">No visits match your filters.</td></tr>
                             ) : paged.map((v) => {
                                 const st = getVisitStatusStyle(v.status);
+                                let prescriptions = [];
+                                try {
+                                    if (v.prescriptions) {
+                                        const parsed = typeof v.prescriptions === 'string' ? JSON.parse(v.prescriptions) : v.prescriptions;
+                                        prescriptions = Array.isArray(parsed) ? parsed.filter(p => p !== null && p.prescription_id) : [];
+                                    }
+                                } catch (e) {
+                                    prescriptions = [];
+                                }
+                                const hasPrescriptions = prescriptions.length > 0;
                                 return (
                                 <tr key={v.visit_id} className="hover:bg-surface-container-low transition-colors group">
                                     <td className="px-8 py-6">
@@ -196,7 +306,7 @@ const Visits = () => {
                                             </div>
                                             <div>
                                                 <p className="font-bold text-on-surface">{v.student_name}</p>
-                                                <p className="text-xs text-on-surface-variant">ID: {v.student_id}</p>
+                                                <p className="text-xs text-on-surface-variant">ID: {v.student_number}</p>
                                             </div>
                                         </div>
                                     </td>
@@ -207,6 +317,20 @@ const Visits = () => {
                                     <td className="px-8 py-6">
                                         <p className="text-sm font-semibold text-on-surface max-w-xs truncate">{v.reason}</p>
                                         <p className="text-xs text-on-surface-variant italic">{v.diagnosis}</p>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        {hasPrescriptions ? (
+                                            <div className="space-y-2">
+                                                {prescriptions.map((p, idx) => (
+                                                    <div key={idx} className="bg-primary-container/30 rounded-lg px-3 py-2 border-l-2 border-primary">
+                                                        <p className="text-sm font-semibold text-on-surface">{p.medicine_name}</p>
+                                                        <p className="text-xs text-on-surface-variant">{p.quantity} unit{p.quantity !== 1 ? 's' : ''}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-on-surface-variant italic">None</span>
+                                        )}
                                     </td>
                                     <td className="px-8 py-6">
                                         <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${st.bg} ${st.fg}`}>{st.label}</span>
@@ -271,33 +395,6 @@ const Visits = () => {
                         </div>
                     </div>
                 </div>
-
-                <section className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5">
-                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Today's Total</p>
-                        <h3 className="text-4xl font-black font-manrope text-on-surface">{todayCount}</h3>
-                        <div className="mt-4 flex items-center gap-2 text-on-surface-variant font-bold text-xs">
-                            Visit{todayCount !== 1 ? 's' : ''} recorded today
-                        </div>
-                    </div>
-                    <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5">
-                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Ongoing Visits</p>
-                        <h3 className="text-4xl font-black font-manrope text-primary">{String(ongoingCount).padStart(2, '0')}</h3>
-                        <div className="mt-4 flex items-center gap-2 text-on-surface-variant font-bold text-xs">
-                            Currently in progress
-                        </div>
-                    </div>
-                    <div className="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5 col-span-2 relative overflow-hidden">
-                        <div className="relative z-10">
-                            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Most Common Reason</p>
-                            <h3 className="text-3xl font-black font-manrope text-on-surface">{mostCommonReason}</h3>
-                            <p className="mt-2 text-sm text-on-surface-variant">{mostCommonCount > 0 ? `Reported ${mostCommonCount} time${mostCommonCount !== 1 ? 's' : ''} across all visits` : 'No visit data yet'}</p>
-                        </div>
-                        <div className="absolute -right-12 -bottom-12 opacity-10">
-                            <span className="material-symbols-outlined text-[160px]">health_and_safety</span>
-                        </div>
-                    </div>
-                </section>
                 </div>
             </main>
 

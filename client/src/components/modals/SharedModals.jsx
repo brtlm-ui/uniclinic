@@ -197,6 +197,7 @@ export function AddEditStudentModal({ open, onClose, student = null, onSubmit })
                                 <option value="">Select course</option>
                                 <option>B.S. Nursing</option>
                                 <option>B.S. Computer Science</option>
+                                <option>B.S. Information Technology</option>
                                 <option>B.S. Architecture</option>
                                 <option>B.A. Communication</option>
                                 <option>B.S. Business Administration</option>
@@ -325,16 +326,16 @@ export function AddEditVisitModal({ open, onClose, visit = null, onSubmit, stude
 /* ─────────────────────────────────────────────────────────────
    ADD / EDIT MEDICINE MODAL
 ───────────────────────────────────────────────────────────── */
-export function AddEditMedicineModal({ open, onClose, medicine = null }) {
+export function AddEditMedicineModal({ open, onClose, medicine = null, onSubmit }) {
     const isEdit = !!medicine;
-    const [form, setForm] = useState({ name: '', quantity: '', category: '', expiryDate: '', threshold: '' });
+    const [form, setForm] = useState({ name: '', stock_quantity: '', expiration_date: '' });
 
     useEffect(() => {
-        if (medicine) setForm({ name: medicine.name || '', quantity: medicine.quantity || '', category: medicine.category || '', expiryDate: medicine.expiryDate || '', threshold: medicine.threshold || '' });
-        else setForm({ name: '', quantity: '', category: '', expiryDate: '', threshold: '' });
+        if (medicine) setForm({ name: medicine.name || '', stock_quantity: medicine.stock_quantity || '', expiration_date: medicine.expiration_date || '' });
+        else setForm({ name: '', stock_quantity: '', expiration_date: '' });
     }, [medicine, open]);
 
-    const handleSubmit = (e) => { e.preventDefault(); alert(`${isEdit ? 'Updated' : 'Added'} medicine: ${form.name}`); onClose(); };
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit?.(form); onClose(); };
 
     return (
         <ModalShell open={open} onClose={onClose} maxWidth="max-w-lg">
@@ -344,28 +345,11 @@ export function AddEditMedicineModal({ open, onClose, medicine = null }) {
                     <FormRow label="Medicine Name">
                         <input className={inputCls} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Paracetamol 500mg" required />
                     </FormRow>
-                    <div className="grid grid-cols-2 gap-4">
-                        <FormRow label="Stock Quantity">
-                            <input type="number" className={inputCls} value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" required />
-                        </FormRow>
-                        <FormRow label="Low Stock Threshold">
-                            <input type="number" className={inputCls} value={form.threshold} onChange={e => setForm({ ...form, threshold: e.target.value })} placeholder="e.g. 20" />
-                        </FormRow>
-                    </div>
-                    <FormRow label="Category">
-                        <select className={selectCls} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                            <option value="">Select category</option>
-                            <option>Analgesic</option>
-                            <option>Antibiotic</option>
-                            <option>Antihistamine</option>
-                            <option>Antiseptic</option>
-                            <option>Antiviral</option>
-                            <option>Vitamins & Supplements</option>
-                            <option>Emergency Medication</option>
-                        </select>
+                    <FormRow label="Stock Quantity">
+                        <input type="number" className={inputCls} value={form.stock_quantity} onChange={e => setForm({ ...form, stock_quantity: e.target.value })} placeholder="0" required />
                     </FormRow>
                     <FormRow label="Expiration Date">
-                        <input type="date" className={inputCls} value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} />
+                        <input type="date" className={inputCls} value={form.expiration_date} onChange={e => setForm({ ...form, expiration_date: e.target.value })} />
                     </FormRow>
                 </div>
                 <div className="px-8 pb-8 flex gap-3">
@@ -434,7 +418,7 @@ export function AddEditStaffModal({ open, onClose, staff = null, onSubmit }) {
 /* ─────────────────────────────────────────────────────────────
    ADD / EDIT TREATMENT MODAL
 ───────────────────────────────────────────────────────────── */
-export function AddEditTreatmentModal({ open, onClose, treatment = null, onSubmit }) {
+export function AddEditTreatmentModal({ open, onClose, treatment = null, visits = [], onSubmit }) {
     const isEdit = !!treatment;
     const [form, setForm] = useState({ visit_id: '', treatment_given: '', notes: '' });
     useEffect(() => {
@@ -448,8 +432,20 @@ export function AddEditTreatmentModal({ open, onClose, treatment = null, onSubmi
             <ModalHeader icon="healing" title={isEdit ? 'Edit Treatment Record' : 'New Treatment Record'} subtitle="Fill in the treatment details below" onClose={onClose} />
             <form onSubmit={handleSubmit} className="p-8 space-y-5">
                 <div>
-                    <label className="block text-sm font-semibold text-on-surface-variant mb-2">Visit ID</label>
-                    <input className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary/20 transition-all text-sm" value={form.visit_id} onChange={set('visit_id')} required placeholder="e.g. 1" type="number" min="1" />
+                    <label className="block text-sm font-semibold text-on-surface-variant mb-2">Select Visit</label>
+                    <select 
+                        className="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary/20 transition-all text-sm appearance-none" 
+                        value={form.visit_id} 
+                        onChange={set('visit_id')} 
+                        required
+                    >
+                        <option value="">Select visit</option>
+                        {visits.map(v => (
+                            <option key={v.visit_id} value={v.visit_id}>
+                                {v.student_name} — {new Date(v.visit_date).toLocaleDateString()}
+                            </option>
+                        ))}
+                    </select>
                 </div>
                 <div>
                     <label className="block text-sm font-semibold text-on-surface-variant mb-2">Treatment Given</label>

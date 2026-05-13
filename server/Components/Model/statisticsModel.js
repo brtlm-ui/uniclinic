@@ -75,12 +75,14 @@ async function getMedicineUsageStats() {
 // getVisitDetailStats
 // ─────────────────────────────────────────────────────────────────────────────
 // SQL Features used:
-//   • 4-table JOIN: visits ← students, staff, prescriptions
+//   • 3-table JOIN: visits ← students, staff
+//   • LEFT JOIN prescriptions for counts
 //   • Aggregation: COUNT, SUM
 // ─────────────────────────────────────────────────────────────────────────────
 async function getVisitDetailStats() {
   const db = getDB();
-  const [rows] = await db.query(`
+  // First get all visits with basic info
+  const [visitRows] = await db.query(`
     SELECT
       v.visit_id,
       v.visit_date,
@@ -93,19 +95,33 @@ async function getVisitDetailStats() {
       s.course,
       s.year_level,
       st.name                                  AS staff_name,
-      st.role                                  AS staff_role,
-      COUNT(p.prescription_id)                 AS prescription_count,
-      COALESCE(SUM(p.quantity), 0)             AS total_medicines_given
+      st.role                                  AS staff_role
     FROM visits v
     LEFT JOIN students      s  ON v.student_id = s.student_id
     LEFT JOIN staff         st ON v.staff_id   = st.staff_id
-    LEFT JOIN prescriptions p  ON v.visit_id   = p.visit_id
-    GROUP BY
-      v.visit_id, v.visit_date, v.visit_time, v.status, v.reason, v.diagnosis,
-      s.first_name, s.last_name, s.student_number, s.course, s.year_level,
-      st.name, st.role
     ORDER BY v.visit_date DESC, v.visit_time DESC
   `);
+  
+  // For each visit, get prescriptions
+  const rows = await Promise.all(visitRows.map(async (v) => {
+    const [prescriptions] = await db.query(`
+      SELECT
+        p.prescription_id,
+        m.name AS medicine_name,
+        p.quantity
+      FROM prescriptions p
+      LEFT JOIN medicines m ON p.medicine_id = m.medicine_id
+      WHERE p.visit_id = ?
+    `, [v.visit_id]);
+    
+    return {
+      ...v,
+      prescriptions: prescriptions,
+      prescription_count: prescriptions.length,
+      total_medicines_given: prescriptions.reduce((sum, p) => sum + (p.quantity || 0), 0)
+    };
+  }));
+  
   return rows;
 }
 

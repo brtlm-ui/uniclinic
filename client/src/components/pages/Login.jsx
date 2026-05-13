@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Cookies from 'universal-cookie';
 import { config, endpoints } from '../config/config';
+import logo from '../../assets/logo.svg.svg';
 
 const cookies = new Cookies();
 
@@ -35,22 +36,13 @@ const Login = () => {
 
     return (
         <>
-            <header className="fixed top-0 left-0 w-full z-50 px-8 py-6 flex justify-between items-center backdrop-blur-xl bg-white/40">
-                <div className="text-2xl font-black font-headline text-primary tracking-tight">
-                    UniClinic
-                </div>
-                <div className="hidden md:flex items-center gap-2 text-on-surface-variant font-medium text-sm">
-                    <span className="material-symbols-outlined text-lg">verified_user</span>
-                    <span>Secure Medical Environment</span>
-                </div>
-            </header>
-            <main className="min-h-screen flex items-center justify-center pt-20 px-6">
+            <main className="min-h-screen flex items-center justify-center px-6">
                 <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
 
                     <div className="space-y-8">
                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-secondary-container text-on-secondary-container rounded-full text-xs font-bold uppercase tracking-wider">
-                            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '\'FILL\' 1' }}>health_and_safety</span>
-                            Clinical Serenity
+                            <img src={logo} alt="University Clinic Logo" className="h-4 w-4 object-contain" />
+                            University Clinic
                         </div>
                         <h1 className="font-headline text-5xl md:text-7xl font-extrabold text-on-surface leading-[1.1] tracking-tighter">
                             Streamlining <br />
@@ -77,7 +69,7 @@ const Login = () => {
                                 <h2 className="font-headline text-3xl font-bold text-on-surface mb-2">Welcome Back</h2>
                                 <p className="text-on-surface-variant font-medium">Please enter your credentials to proceed.</p>
                             </div>
-                            <form action="#" className="space-y-6">
+                            <form onSubmit={handleLogin} className="space-y-6">
                                 <div className="space-y-2">
                                     <label className="text-sm font-semibold text-on-surface-variant ml-2 uppercase tracking-wide" htmlFor="username">Username</label>
                                     <div className="relative flex items-center group ghost-border rounded-lg transition-all duration-300">
@@ -121,7 +113,6 @@ const Login = () => {
                                 <button 
                                     className="w-full py-5 bg-primary text-on-primary font-bold rounded-full shadow-lg shadow-primary/20 hover:bg-primary-dim hover:scale-[1.02] active:scale-95 transition-all duration-200 mt-4 flex justify-center items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed" 
                                     type="submit"
-                                    onClick={(e) => handleLogin(e)}
                                     disabled={loading}
                                 >
                                     {loading ? 'Signing in...' : 'Access Dashboard'}
@@ -131,7 +122,7 @@ const Login = () => {
                             <div className="mt-12 pt-8 border-t border-outline-variant/10 text-center">
                                 <p className="text-sm text-on-surface-variant font-medium">
                                     Need technical assistance?
-                                    <a className="text-primary font-bold hover:underline" href="#">Contact Health Concierge</a>
+                                    <a className="text-primary font-bold hover:underline" href="#"> Contact University Clinic</a>
                                 </p>
                             </div>
                         </div>

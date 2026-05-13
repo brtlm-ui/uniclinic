@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { NAV_LINKS } from '../config/Constants'
 import { LogoutModal } from '../modals/SharedModals'
 import Cookies from 'universal-cookie'
+import logo from '../../assets/logo.svg.svg'
 
 const cookies = new Cookies()
 
@@ -37,12 +38,10 @@ function Sidebar() {
             <nav className="fixed left-0 top-0 h-full w-72 overflow-hidden bg-slate-50 flex flex-col py-8 space-y-2 border-r border-slate-200 z-50">
                 <div className="px-8 mb-12">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
-                            <span className="material-symbols-outlined text-primary" data-icon="medical_services">medical_services</span>
-                        </div>
+                        <img src={logo} alt="University Clinic Logo" className="w-10 h-10 object-contain" />
                         <div>
-                            <h2 className="text-xl font-bold font-manrope text-slate-800 leading-tight">Clinical Serenity</h2>
-                            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Health Concierge</p>
+                            <h2 className="text-xl font-bold font-manrope text-slate-800 leading-tight">University Clinic</h2>
+                            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Health Management</p>
                         </div>
                     </div>
                 </div>
